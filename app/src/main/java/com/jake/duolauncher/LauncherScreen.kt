@@ -162,6 +162,7 @@ fun LauncherScreen(
     var openFolderId by rememberSaveable { mutableStateOf<String?>(null) }
     var createFolderFirstId by rememberSaveable { mutableStateOf<String?>(null) }
     var editingHome by rememberSaveable { mutableStateOf(false) }
+    var showSpotlight by rememberSaveable { mutableStateOf(false) }
     var editAnchor by rememberSaveable { mutableStateOf<Int?>(null) }
     var savedPage by rememberSaveable { mutableIntStateOf(0) }
     var lastHomePage by rememberSaveable { mutableIntStateOf(0) }
@@ -417,7 +418,10 @@ fun LauncherScreen(
     LaunchedEffect(drag.active, drag.moved) { if (drag.active && drag.moved) editingHome = true }
     BackHandler(enabled = editingHome && sheet.isEmpty() && !drag.active) { editingHome = false; editAnchor = null }
     val badges by BadgeService.badges.collectAsState()
-    CompositionLocalProvider(LocalHomeEditMode provides editMode, LocalBadges provides badges) {
+    val iconContext = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(Unit) { IconStyleStore.load(iconContext) }
+    val iconFilter = iconColorFilter(IconStyleStore.style.value)
+    CompositionLocalProvider(LocalHomeEditMode provides editMode, LocalBadges provides badges, LocalIconFilter provides iconFilter) {
     Box(Modifier.fillMaxSize().graphicsLayer {
         // The feed frame reuses the pager's render nodes in another window. Give Main
         // a complete render target so cross-window damage cannot erase stationary controls.
@@ -516,6 +520,7 @@ fun LauncherScreen(
                     }
                 },
                 onDownwardSwipe = launcherActivity::openSystemShade,
+                onSearchSwipe = { showSpotlight = true },
                 // The inner screen shows the widgets page on the left instead of Google.
                 onLeadingOverscroll = if (firstHome == 0 && !geometry.expanded) onDiscover else null,
             )) {
@@ -970,8 +975,10 @@ fun LauncherScreen(
                                         horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(session.provider?.loadLabel(launcherActivity.packageManager)?.toString()
                                             ?: when (session.builtinId) {
-                                                CLOCK_WIDGET -> "Clock"
+                                                CLOCK_WIDGET -> "Horloge"
                                                 DATE_WIDGET -> "Date"
+                                                WEATHER_WIDGET -> "Météo"
+                                                BATTERY_WIDGET -> "Batterie"
                                                 else -> "Panneau de widgets"
                                             }, color = Ink,
                                             textAlign = TextAlign.Center)
@@ -1234,6 +1241,7 @@ fun LauncherScreen(
         }
         }
     
+        if (showSpotlight) SpotlightSearch(state, onLaunch = onLaunch, onClose = { showSpotlight = false })
         if (editingHome && sheet.isEmpty() && emptyCellIndex == null) HomeEditBar(
             onAdd = {
                 val page = lastHomePage.coerceIn(0, homePages - 1)
@@ -1696,7 +1704,7 @@ private fun DockAppColumn(
                         Image(app.icon.asImageBitmap(), null, Modifier.size(iconSize.dp).testTag("dock-icon-$id")
                             .onGloballyPositioned { if (savedIndex >= 0) launchBounds[savedIndex].set(it.boundsInWindow().toAndroidBounds()) }
                             .graphicsLayer { scaleX = slotScales[renderIndex]; scaleY = slotScales[renderIndex] }
-                            .clip(RoundedCornerShape(11.dp)))
+                            .clip(RoundedCornerShape(11.dp)), colorFilter = LocalIconFilter.current)
                         if (editMode.active && savedIndex >= 0) RemoveBadge({ editMode.removeFromDock(savedIndex) },
                             Modifier.align(Alignment.TopStart).offset(x = (-7).dp, y = (-7).dp))
                         BadgeDot(LocalBadges.current[app.packageName] ?: 0, Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-6).dp))
@@ -1727,7 +1735,7 @@ private fun FolderTile(folder: FolderEntry, apps: Map<String, AppEntry>, size: F
                 apps[id]?.let { app ->
                     Image(app.icon.asImageBitmap(), null, Modifier.align(when (index) {
                         0 -> Alignment.TopStart; 1 -> Alignment.TopEnd; 2 -> Alignment.BottomStart; else -> Alignment.BottomEnd
-                    }).padding(5.dp).size((size * .38f).dp).clip(RoundedCornerShape(6.dp)))
+                    }).padding(5.dp).size((size * .38f).dp).clip(RoundedCornerShape(6.dp)), colorFilter = LocalIconFilter.current)
                 }
             }
         }
@@ -1754,7 +1762,7 @@ private fun AppTile(app: AppEntry, size: Float, labels: Boolean, modifier: Modif
         horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.homeJiggle(app.id)) {
             Image(app.icon.asImageBitmap(), null, Modifier.size(iconSize).onGloballyPositioned { bounds.set(it.boundsInWindow().toAndroidBounds()) }
-                .graphicsLayer { scaleX = scale; scaleY = scale }.clip(RoundedCornerShape((size * .24f).dp)))
+                .graphicsLayer { scaleX = scale; scaleY = scale }.clip(RoundedCornerShape((size * .24f).dp)), colorFilter = LocalIconFilter.current)
             if (editing && onRemove != null) RemoveBadge(onRemove, Modifier.align(Alignment.TopStart).offset(x = (-7).dp, y = (-7).dp))
             BadgeDot(LocalBadges.current[app.packageName] ?: 0, Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-6).dp))
         }
@@ -1786,6 +1794,48 @@ private fun ClockCard(onClick: () -> Unit) {
         Icon(Icons.Rounded.Schedule, "Widget horloge ; touchez pour remplacer", tint = Color.White, modifier = Modifier.size(20.dp))
         Text(time.format(DateTimeFormatter.ofPattern(format)), color = Color.White, fontWeight = FontWeight.Light, fontSize = 30.sp, maxLines = 1)
         Text("Heure locale", color = Color.White.copy(alpha = .8f), fontSize = 11.sp)
+    }
+}
+
+@Composable
+private fun WeatherCard(onClick: () -> Unit) {
+    val context = LocalContext.current
+    var weather by remember { mutableStateOf<StandByWeather?>(null) }
+    LaunchedEffect(Unit) {
+        while (true) { loadStandByWeather(context)?.let { weather = it }; kotlinx.coroutines.delay(30 * 60_000L) }
+    }
+    GlassCard(onClick = onClick) {
+        val w = weather
+        Text(w?.symbol ?: "🌡️", fontSize = 20.sp)
+        Text(w?.let { "${it.temperature}°" } ?: "—", color = Color.White, fontWeight = FontWeight.Light, fontSize = 30.sp, maxLines = 1)
+        Text(w?.let { it.label + (if (it.high != null && it.low != null) " · ${it.low}°/${it.high}°" else "") }
+            ?: "Lieu : réglages › Apparence", color = Color.White.copy(alpha = .8f), fontSize = 11.sp, maxLines = 1)
+    }
+}
+
+@Composable
+private fun BatteryCard(onClick: () -> Unit) {
+    val context = LocalContext.current
+    var level by remember { mutableStateOf<Int?>(null) }
+    var charging by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            val intent = context.registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
+            level = context.getSystemService(android.os.BatteryManager::class.java)
+                ?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)?.takeIf { it in 0..100 }
+            charging = (intent?.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) ?: 0) != 0
+            kotlinx.coroutines.delay(60_000L)
+        }
+    }
+    GlassCard(onClick = onClick) {
+        Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(progress = { (level ?: 0) / 100f }, Modifier.fillMaxSize(),
+                color = if ((level ?: 100) <= 20 && !charging) Color(0xFFFF453A) else Color(0xFF30D158),
+                trackColor = Color.White.copy(alpha = .25f), strokeWidth = 4.dp)
+            Icon(if (charging) Icons.Rounded.Bolt else Icons.Rounded.PhoneAndroid, null, tint = Color.White, modifier = Modifier.size(16.dp))
+        }
+        Text(level?.let { "$it %" } ?: "—", color = Color.White, fontWeight = FontWeight.Light, fontSize = 30.sp, maxLines = 1)
+        Text(if (charging) "En charge" else "Téléphone", color = Color.White.copy(alpha = .8f), fontSize = 11.sp)
     }
 }
 
@@ -1859,8 +1909,10 @@ private fun WidgetSlot(id: Int, slot: Int, controller: WidgetController, modifie
 }
 
 private fun widgetLabel(id: Int, controller: WidgetController) = when (id) {
-    CLOCK_WIDGET -> "Clock"
+    CLOCK_WIDGET -> "Horloge"
     DATE_WIDGET -> "Date"
+    WEATHER_WIDGET -> "Météo"
+    BATTERY_WIDGET -> "Batterie"
     INFO_WIDGET -> "Panneau de widgets"
     EMPTY_WIDGET -> "Ajouter un widget"
     else -> controller.label(id)
@@ -1878,6 +1930,8 @@ private fun MovableWidget(id: Int, slot: Int, controller: WidgetController, drag
         when (id) {
             CLOCK_WIDGET -> ClockCard(onAdd)
             DATE_WIDGET -> DateCard(onAdd)
+            WEATHER_WIDGET -> WeatherCard(onAdd)
+            BATTERY_WIDGET -> BatteryCard(onAdd)
             INFO_WIDGET -> if (slot % 3 == 2) ExpandedCard(onAdd) else GlassCard(onClick = onAdd) {
                 Icon(Icons.Rounded.Widgets, null, tint = Color.White, modifier = Modifier.size(28.dp))
                 Text("Vos widgets", color = Color.White, fontSize = 15.sp, maxLines = 1)

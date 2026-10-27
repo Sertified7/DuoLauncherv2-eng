@@ -8,6 +8,8 @@ const val CLOCK_WIDGET = -2
 const val DATE_WIDGET = -3
 const val INFO_WIDGET = -4
 const val NEEDS_BINDING_WIDGET = -5
+const val WEATHER_WIDGET = -6
+const val BATTERY_WIDGET = -7
 
 data class WidgetPlacement(val slot: Int, val id: Int, val page: Int, val column: Int, val row: Int, val spanX: Int, val spanY: Int)
 data class WidgetRestore(val slot: Int, val providerComponent: String, val userSerial: Long, val title: String,

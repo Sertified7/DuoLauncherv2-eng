@@ -107,6 +107,15 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                         .testTag("wallpaper-preview")) { Icon(Icons.Rounded.Wallpaper, null); Spacer(Modifier.width(8.dp)); Text("Aperçu du fond d’écran Android") }
                     HorizontalDivider(Modifier.padding(vertical = 6.dp))
                     AppearanceSettings(appearance, onAppearanceMode, onAppearanceManual, onAppearanceDeviceLocation, onAppearanceClear)
+                    HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                    Text("Style des icônes", style = MaterialTheme.typography.titleSmall)
+                    val iconCtx = androidx.compose.ui.platform.LocalContext.current
+                    LaunchedEffect(Unit) { IconStyleStore.load(iconCtx) }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        IconStyle.entries.forEach { style ->
+                            FilterChip(IconStyleStore.style.value == style, { IconStyleStore.set(iconCtx, style) }, label = { Text(style.label) })
+                        }
+                    }
                 }
                 CustomizationPage.HOME -> HomeLayoutSettings(state, wide, { wide = it }, model, homePage,
                     onEditPins, onWidget, onAddWidget, onRemoveWidget)
@@ -158,7 +167,7 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     }
                     Text("« Toutes les applis » garde toujours la recherche locale.", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("Balayez latéralement n’importe où sur l’accueil pour changer de page. Balayez vers le bas pour les notifications ou les réglages rapides.",
+                    Text("Balayez latéralement pour changer de page. Balayez vers le bas depuis le haut de l’écran pour les notifications, ou depuis le milieu pour la recherche (applis, contacts, réglages, calculs).",
                         style = MaterialTheme.typography.bodyMedium)
                 }
                 CustomizationPage.BACKUP -> {

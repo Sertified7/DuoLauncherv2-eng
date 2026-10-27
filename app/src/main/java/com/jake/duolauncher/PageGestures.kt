@@ -81,7 +81,10 @@ internal fun Modifier.onePageGestures(
     canStartDownwardSwipe: (Offset) -> Boolean = { true },
     onDownwardSwipe: ((ShadePanel) -> Unit)? = null,
     onLeadingOverscroll: (() -> Unit)? = null,
+    /** Downward swipes starting below the top of the screen open search instead of the system shade. */
+    onSearchSwipe: (() -> Unit)? = null,
 ) : Modifier {
+    val currentSearchSwipe by rememberUpdatedState(onSearchSwipe)
     val currentEnabled by rememberUpdatedState(enabled)
     val currentCanStartDownwardSwipe by rememberUpdatedState(canStartDownwardSwipe)
     val currentDownwardSwipe by rememberUpdatedState(onDownwardSwipe)
@@ -141,7 +144,9 @@ internal fun Modifier.onePageGestures(
                                     cancelReason = if (openDownward) "downward_action" else "vertical_axis"
                                     if (openDownward) {
                                         change.consume()
-                                        currentDownwardSwipe?.invoke(shadePanelForStart(down.position.x, size.width.toFloat()))
+                                        val search = currentSearchSwipe
+                                        if (search != null && down.position.y > size.height * .18f) search()
+                                        else currentDownwardSwipe?.invoke(shadePanelForStart(down.position.x, size.width.toFloat()))
                                     }
                                     break
                                 }

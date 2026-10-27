@@ -251,7 +251,7 @@ internal fun VisualWidgetPicker(
                 if (words.isEmpty() && selectedProfile.isPersonal) {
                     item("duo-widgets") { Text("Duo Launcher", style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(top = 10.dp, start = 4.dp)) }
-                    items(listOf(CLOCK_WIDGET to "Horloge", DATE_WIDGET to "Date", INFO_WIDGET to "Panneau de widgets"),
+                    items(listOf(CLOCK_WIDGET to "Horloge", DATE_WIDGET to "Date", WEATHER_WIDGET to "Météo", BATTERY_WIDGET to "Batterie", INFO_WIDGET to "Panneau de widgets"),
                         key = { "builtin-${it.first}" }) { (id, label) ->
                         Surface(Modifier.fillMaxWidth().testTag("widget-builtin-$id")
                             .clickable { focusManager.clearFocus(); keyboard?.hide(); onBuiltin(id) },

@@ -96,3 +96,45 @@ internal fun loadAppShortcuts(context: Context, app: AppEntry): List<AppShortcut
 internal fun startAppShortcut(context: Context, shortcut: AppShortcut) = runCatching {
     context.getSystemService(LauncherApps::class.java).startShortcut(shortcut.info, null, null)
 }.isSuccess
+
+// ---------- Themed icons (iOS 18 style: dark or tinted) ----------
+
+internal enum class IconStyle(val label: String) { NORMAL("Normales"), DARK("Sombres"), TINTED("Teintées") }
+
+/** The chosen icon look, kept in preferences and observable by Compose. */
+internal object IconStyleStore {
+    private const val PREFS = "icons"
+    private var loaded = false
+    val style = androidx.compose.runtime.mutableStateOf(IconStyle.NORMAL)
+
+    fun load(context: Context) {
+        if (loaded) return
+        loaded = true
+        style.value = runCatching {
+            IconStyle.valueOf(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("style", "NORMAL")!!)
+        }.getOrDefault(IconStyle.NORMAL)
+    }
+
+    fun set(context: Context, value: IconStyle) {
+        style.value = value
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("style", value.name).apply()
+    }
+}
+
+/** A colour filter that darkens icons (Sombres) or turns them monochrome with a blue tint (Teintées). */
+internal fun iconColorFilter(style: IconStyle): androidx.compose.ui.graphics.ColorFilter? = when (style) {
+    IconStyle.NORMAL -> null
+    IconStyle.DARK -> androidx.compose.ui.graphics.ColorFilter.colorMatrix(androidx.compose.ui.graphics.ColorMatrix(floatArrayOf(
+        .62f, 0f, 0f, 0f, -6f,
+        0f, .62f, 0f, 0f, -6f,
+        0f, 0f, .66f, 0f, -2f,
+        0f, 0f, 0f, 1f, 0f)))
+    IconStyle.TINTED -> androidx.compose.ui.graphics.ColorFilter.colorMatrix(androidx.compose.ui.graphics.ColorMatrix(floatArrayOf(
+        .16f, .32f, .06f, 0f, 20f,
+        .22f, .44f, .08f, 0f, 46f,
+        .28f, .56f, .10f, 0f, 92f,
+        0f, 0f, 0f, 1f, 0f)))
+}
+
+/** The filter to apply to app icons right now. */
+internal val LocalIconFilter = staticCompositionLocalOf<androidx.compose.ui.graphics.ColorFilter?> { null }

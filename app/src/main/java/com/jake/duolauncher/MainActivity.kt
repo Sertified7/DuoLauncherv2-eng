@@ -233,6 +233,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun launchApp(app: AppEntry, bounds: android.graphics.Rect? = null) {
+        UsageLog.record(this, app.id)
         try {
             val user = getSystemService(UserManager::class.java).getUserForSerialNumber(app.userSerial)
                 ?: throw IllegalStateException("Profil indisponible")

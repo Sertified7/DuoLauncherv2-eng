@@ -7,6 +7,8 @@
     <!-- StandBy: weather from Open-Meteo and the next calendar event (asked only when turned on). -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <!-- Spotlight: contacts in search results (asked on first use). -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
     <queries>
         <package android:name="com.google.android.googlequicksearchbox" />
         <intent>
