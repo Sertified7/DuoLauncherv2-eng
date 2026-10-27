@@ -425,6 +425,11 @@ fun LauncherScreen(
         lastSurface = state.surfaceExpanded
         if (!changed && foldReveal.value >= 1f) return@LaunchedEffect
         foldReveal.snapTo(0f)
+        // Unfolding: follow the real hinge angle so the left page opens with the phone, like the iPhone Duo.
+        if (state.surfaceExpanded && followHingeAngle(rootView.context) { foldReveal.snapTo(it) }) {
+            foldReveal.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = .7f, stiffness = 260f))
+            return@LaunchedEffect
+        }
         val waitStart = android.os.SystemClock.uptimeMillis()
         while (!(rootView.isShown && rootView.hasWindowFocus()) && android.os.SystemClock.uptimeMillis() - waitStart < 2_000L) {
             kotlinx.coroutines.delay(16)

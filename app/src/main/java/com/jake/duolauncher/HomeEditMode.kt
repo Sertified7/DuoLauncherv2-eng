@@ -138,3 +138,37 @@ internal fun Modifier.foldDoor(): Modifier {
         scaleY = .96f + .04f * p
     }
 }
+
+/**
+ * Streams the hinge angle (Android's TYPE_HINGE_ANGLE, 0° closed → 180° flat) into [onProgress] while the
+ * phone is being opened, mapping roughly 90°→175° to 0→1. Returns false when the phone has no hinge
+ * sensor; otherwise returns once the phone is almost flat, the angle stops changing, or after 3 s.
+ */
+internal suspend fun followHingeAngle(context: android.content.Context, onProgress: suspend (Float) -> Unit): Boolean {
+    val sensors = context.getSystemService(android.hardware.SensorManager::class.java) ?: return false
+    val hinge = sensors.getDefaultSensor(android.hardware.Sensor.TYPE_HINGE_ANGLE) ?: return false
+    val angles = kotlinx.coroutines.flow.MutableStateFlow<Float?>(null)
+    val listener = object : android.hardware.SensorEventListener {
+        override fun onSensorChanged(event: android.hardware.SensorEvent) { angles.value = event.values[0] }
+        override fun onAccuracyChanged(sensor: android.hardware.Sensor?, accuracy: Int) = Unit
+    }
+    if (!sensors.registerListener(listener, hinge, android.hardware.SensorManager.SENSOR_DELAY_GAME)) return false
+    try {
+        val start = android.os.SystemClock.uptimeMillis()
+        var lastChange = start; var last = -1f
+        while (android.os.SystemClock.uptimeMillis() - start < 3_000L) {
+            val angle = angles.value
+            if (angle != null) {
+                if (kotlin.math.abs(angle - last) > .5f) { last = angle; lastChange = android.os.SystemClock.uptimeMillis() }
+                onProgress(((angle - 90f) / 85f).coerceIn(0f, 1f))
+                if (angle >= 172f) break
+                // Held half-open and still: stop following and let the page settle open.
+                if (android.os.SystemClock.uptimeMillis() - lastChange > 700L) break
+            }
+            kotlinx.coroutines.delay(16)
+        }
+    } finally {
+        sensors.unregisterListener(listener)
+    }
+    return true
+}
