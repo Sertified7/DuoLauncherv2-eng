@@ -152,6 +152,15 @@ private fun StandByScreen(onExit: () -> Unit) {
             delay(1_000L - System.currentTimeMillis() % 1_000L)
         }
     }
+    var weather by remember { mutableStateOf<StandByWeather?>(null) }
+    var event by remember { mutableStateOf<StandByEvent?>(null) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            loadStandByWeather(context)?.let { weather = it }
+            delay(30 * 60_000L)
+        }
+    }
+    LaunchedEffect(now.minute / 5) { event = loadNextEvent(context) }
     // At night StandBy dims to red so it doesn't light up the room, as on iPhone.
     val night = now.hour >= 22 || now.hour < 7
     val ink = if (night) Color(0xFFB3261E) else Color.White
@@ -174,17 +183,35 @@ private fun StandByScreen(onExit: () -> Unit) {
         }
         Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
             StandByCard(ink) {
-                Text("Batterie", color = soft, fontSize = 14.sp)
-                Text(battery?.let { "$it %" } ?: "—", color = ink, fontSize = 40.sp, fontWeight = FontWeight.Light)
-                Text("En charge", color = soft, fontSize = 14.sp)
+                val w = weather
+                if (w != null) {
+                    Text("Météo", color = soft, fontSize = 14.sp)
+                    Text("${w.symbol}  ${w.temperature}°", color = ink, fontSize = 40.sp, fontWeight = FontWeight.Light, maxLines = 1)
+                    Text(w.label + (if (w.high != null && w.low != null) " · ${w.low}° / ${w.high}°" else ""), color = soft, fontSize = 14.sp, maxLines = 1)
+                } else {
+                    Text("Batterie", color = soft, fontSize = 14.sp)
+                    Text(battery?.let { "$it %" } ?: "—", color = ink, fontSize = 40.sp, fontWeight = FontWeight.Light)
+                    Text("En charge", color = soft, fontSize = 14.sp)
+                }
             }
             Spacer(Modifier.height(16.dp))
             StandByCard(ink) {
-                Text("Prochain réveil", color = soft, fontSize = 14.sp)
-                Text(nextAlarm?.format(DateTimeFormatter.ofPattern(if (is24h) "HH:mm" else "h:mm a")) ?: "Aucun",
-                    color = ink, fontSize = 40.sp, fontWeight = FontWeight.Light)
-                Text(nextAlarm?.format(DateTimeFormatter.ofPattern("EEEE")) ?: "", color = soft, fontSize = 14.sp)
+                val e = event
+                if (e != null) {
+                    Text(if (e.allDay) "Aujourd’hui" else if (e.start.toLocalDate() == now.toLocalDate()) "Aujourd’hui · ${e.start.format(DateTimeFormatter.ofPattern(if (is24h) "HH:mm" else "h:mm a"))}"
+                        else "Demain · ${e.start.format(DateTimeFormatter.ofPattern(if (is24h) "HH:mm" else "h:mm a"))}", color = soft, fontSize = 14.sp)
+                    Text(e.title, color = ink, fontSize = 24.sp, fontWeight = FontWeight.Light, maxLines = 2)
+                } else {
+                    Text("Prochain réveil", color = soft, fontSize = 14.sp)
+                    Text(nextAlarm?.format(DateTimeFormatter.ofPattern(if (is24h) "HH:mm" else "h:mm a")) ?: "Aucun",
+                        color = ink, fontSize = 40.sp, fontWeight = FontWeight.Light)
+                    Text(nextAlarm?.format(DateTimeFormatter.ofPattern("EEEE")) ?: "", color = soft, fontSize = 14.sp)
+                }
             }
+            Spacer(Modifier.height(12.dp))
+            Text(listOfNotNull(battery?.let { "🔋 $it %" },
+                nextAlarm?.takeIf { event != null }?.let { "⏰ " + it.format(DateTimeFormatter.ofPattern(if (is24h) "HH:mm" else "h:mm a")) })
+                .joinToString("   "), color = soft, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
         }
     }
 }

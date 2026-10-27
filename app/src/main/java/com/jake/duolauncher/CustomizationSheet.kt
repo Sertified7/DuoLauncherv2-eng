@@ -117,7 +117,18 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     val context = androidx.compose.ui.platform.LocalContext.current
                     var standBy by remember { mutableStateOf(isStandByEnabled(context)) }
                     SettingsSwitch("Mode StandBy", standBy, { standBy = it; setStandByEnabled(context, it) }, "standby-switch")
-                    Text("Écran externe, en charge et posé debout à l’horizontale : grande horloge, batterie et réveil. Touchez pour quitter.",
+                    Text("Écran externe, en charge et posé debout à l’horizontale : grande horloge, météo, agenda et réveil. Touchez pour quitter.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    var calendar by remember { mutableStateOf(hasCalendarAccess(context)) }
+                    val askCalendar = androidx.activity.compose.rememberLauncherForActivityResult(
+                        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { granted -> calendar = granted }
+                    SettingsSwitch("Agenda dans StandBy", calendar, { wanted ->
+                        if (wanted && !calendar) askCalendar.launch(android.Manifest.permission.READ_CALENDAR)
+                        else if (!wanted && calendar) context.startActivity(android.content.Intent(
+                            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            android.net.Uri.fromParts("package", context.packageName, null)))
+                    }, "standby-calendar-switch")
+                    Text("La météo utilise le lieu choisi dans Apparence, sinon la position approximative.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("« Toutes les applis » garde toujours la recherche locale.", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
