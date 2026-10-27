@@ -356,6 +356,7 @@ fun LauncherScreen(
         }
     }
     fun finishDrag(cancelled: Boolean) {
+        if (!cancelled && drag.moved) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         val source = drag.source ?: return
         val moved = drag.moved
         val rawDestination = if (moved && !cancelled) drag.destination(drag.pointer, eligibleDragPages)?.target else null
@@ -409,10 +410,14 @@ fun LauncherScreen(
         removeFromHome = { id -> if (isFolderId(id)) Unit else model.setPinned(id, false) },
         removeFromDock = { index -> model.setDock(index, null) },
         exit = { editingHome = false; editAnchor = null })
+    // Light haptic ticks: entering edit mode and opening a folder, like iPhone.
+    LaunchedEffect(editingHome) { if (editingHome) haptic.performHapticFeedback(HapticFeedbackType.LongPress) }
+    LaunchedEffect(openFolderId) { if (openFolderId != null) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
     // Like iOS: starting to drag an icon puts Home into editing mode.
     LaunchedEffect(drag.active, drag.moved) { if (drag.active && drag.moved) editingHome = true }
     BackHandler(enabled = editingHome && sheet.isEmpty() && !drag.active) { editingHome = false; editAnchor = null }
-    CompositionLocalProvider(LocalHomeEditMode provides editMode) {
+    val badges by BadgeService.badges.collectAsState()
+    CompositionLocalProvider(LocalHomeEditMode provides editMode, LocalBadges provides badges) {
     Box(Modifier.fillMaxSize().graphicsLayer {
         // The feed frame reuses the pager's render nodes in another window. Give Main
         // a complete render target so cross-window damage cannot erase stationary controls.
@@ -511,7 +516,8 @@ fun LauncherScreen(
                     }
                 },
                 onDownwardSwipe = launcherActivity::openSystemShade,
-                onLeadingOverscroll = if (firstHome == 0) onDiscover else null,
+                // The inner screen shows the widgets page on the left instead of Google.
+                onLeadingOverscroll = if (firstHome == 0 && !geometry.expanded) onDiscover else null,
             )) {
             val pagerModifier = Modifier.fillMaxHeight().width(pagerWidth)
                 .drawWithContent {
@@ -519,7 +525,7 @@ fun LauncherScreen(
                     drawLayer(homeLayer)
                     LiveDiscover.host.get()?.invalidateFrame()
                 }.testTag("app-pager")
-                .discoverSwipe(firstHome == 0 && pager.currentPage == 0 && !drag.active && sheet.isEmpty() &&
+                .discoverSwipe(!geometry.expanded && firstHome == 0 && pager.currentPage == 0 && !drag.active && sheet.isEmpty() &&
                     !showFirstRun && selectedId == null, onDiscover)
                 .onGloballyPositioned {
                     if (firstHome > 0) {
@@ -583,6 +589,24 @@ fun LauncherScreen(
                     }
                 }
             }
+            // Inner screen: an empty left page becomes the widgets page (replacing Google). Offer to fill it.
+            val leftPageEmpty = state.leadingSlots.all { it == null } && state.widgetPlacements.none { it.page == -1 }
+            if (geometry.expanded && leftPageEmpty && pager.currentPage == 0 && !drag.active && sheet.isEmpty())
+                Box(Modifier.align(Alignment.CenterStart).fillMaxHeight().width(this@BoxWithConstraints.maxWidth / 2),
+                    contentAlignment = Alignment.Center) {
+                    Surface(Modifier.clip(RoundedCornerShape(24.dp)).liquidGlass(RoundedCornerShape(24.dp))
+                        .clickable {
+                            widgetSlot = model.nextWidgetSlot(); widgetTargetIndex = homeCellIndex(-1, 0)
+                            widgetPackage = null; widgetProfileSerial = null; widgetExactTarget = false; sheet = "widgets"
+                        }, color = Color.Transparent, shape = RoundedCornerShape(24.dp)) {
+                        Column(Modifier.padding(horizontal = 28.dp, vertical = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Rounded.Widgets, null, tint = Color.White, modifier = Modifier.size(30.dp))
+                            Spacer(Modifier.height(8.dp))
+                            Text("Ajouter des widgets", color = Color.White, fontSize = 16.sp)
+                            Text("Ils s’afficheront sur cette page", color = Color.White.copy(alpha = .75f), fontSize = 12.sp)
+                        }
+                    }
+                }
             if (state.verticalStatus) StatusRail(deviceStatus,
                 Modifier.align(Alignment.TopEnd).padding(end = 12.dp).offset(y = geometry.contentTop.dp)
                     .width(preset.dockWidth.dp).onSizeChanged {
@@ -608,7 +632,7 @@ fun LauncherScreen(
                     Icon(Icons.Rounded.Home, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Définir comme appli d’accueil")
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                    if (!drag.active) IconButton(onClick = openDiscover, Modifier.size(32.dp).testTag("discover-page-link")) {
+                    if (!drag.active && !geometry.expanded) IconButton(onClick = openDiscover, Modifier.size(32.dp).testTag("discover-page-link")) {
                         Icon(Icons.Rounded.Explore, "Discover", tint = Color.White.copy(alpha = .65f), modifier = Modifier.size(17.dp))
                     }
                     if (visibleHomePages <= 6) repeat(visibleHomePages) { index ->
@@ -654,7 +678,7 @@ fun LauncherScreen(
                         }
                     }
                     when (sheet) {
-                        "dock" -> AppPicker(state.apps, dockSlot,
+                        "dock" -> AppPicker(state.visibleApps, dockSlot,
                             onSelect = {
                                 if (canPlaceInDock(state.layout, it.id)) {
                                     model.applyDrop(it.id, DropTarget.Dock(dockSlot)); sheet = ""
@@ -1113,7 +1137,8 @@ fun LauncherScreen(
                     }} else null,
                     onCreateFolder = { createFolderFirstId = app.id; selectedId = null },
                     onClose = { appMoveMenu = false; selectedId = null },
-                    onEditHome = { appMoveMenu = false; selectedId = null; editingHome = true })
+                    onEditHome = { appMoveMenu = false; selectedId = null; editingHome = true },
+                    onHide = { model.setHidden(app.id, true); appMoveMenu = false; selectedId = null })
             }
         }
         emptyCellIndex?.let { index ->
@@ -1130,7 +1155,7 @@ fun LauncherScreen(
             AlertDialog(onDismissRequest = { createFolderFirstId = null },
                 title = { Text("Créer un dossier avec ${first?.label ?: "l’appli"}") },
                 text = { LazyColumn(Modifier.heightIn(max = 420.dp).testTag("folder-app-picker")) {
-                    items(state.apps.filter { it.id != firstId && it.available }, key = { it.id }) { second ->
+                    items(state.visibleApps.filter { it.id != firstId && it.available }, key = { it.id }) { second ->
                         TextButton(onClick = {
                             val preferredPage = state.layout.indexOfShortcut(firstId)?.let(::homeCellPage)
                                 ?.takeIf { it >= 0 || expandedWorkspace } ?: lastHomePage.coerceIn(0, homePages - 1)
@@ -1674,6 +1699,7 @@ private fun DockAppColumn(
                             .clip(RoundedCornerShape(11.dp)))
                         if (editMode.active && savedIndex >= 0) RemoveBadge({ editMode.removeFromDock(savedIndex) },
                             Modifier.align(Alignment.TopStart).offset(x = (-7).dp, y = (-7).dp))
+                        BadgeDot(LocalBadges.current[app.packageName] ?: 0, Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-6).dp))
                     }
                 }
             }
@@ -1690,6 +1716,9 @@ private fun FolderTile(folder: FolderEntry, apps: Map<String, AppEntry>, size: F
     Column(modifier.clickable(onClick = onClick).semantics(mergeDescendants = true) {
         contentDescription = "Dossier ${folder.title}, ${folder.appIds.size} applis"
     }, horizontalAlignment = Alignment.CenterHorizontally) {
+        val badges = LocalBadges.current
+        val folderBadge = folder.appIds.sumOf { id -> apps[id]?.packageName?.let(badges::get) ?: 0 }
+        Box {
         Box(Modifier.homeJiggle(folder.id).size(size.dp).liquidGlass(RoundedCornerShape((size * .24f).dp), 1.4f)
             .clip(RoundedCornerShape((size * .24f).dp))
             .dropRegion(drag, DropTarget.Folder(folder.id), page = page, folderId = folder.id)
@@ -1701,6 +1730,8 @@ private fun FolderTile(folder: FolderEntry, apps: Map<String, AppEntry>, size: F
                     }).padding(5.dp).size((size * .38f).dp).clip(RoundedCornerShape(6.dp)))
                 }
             }
+        }
+        BadgeDot(folderBadge, Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-6).dp))
         }
         if (labels) Text(folder.title, color = Color.White, fontSize = 11.sp, maxLines = 1,
             overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
@@ -1725,6 +1756,7 @@ private fun AppTile(app: AppEntry, size: Float, labels: Boolean, modifier: Modif
             Image(app.icon.asImageBitmap(), null, Modifier.size(iconSize).onGloballyPositioned { bounds.set(it.boundsInWindow().toAndroidBounds()) }
                 .graphicsLayer { scaleX = scale; scaleY = scale }.clip(RoundedCornerShape((size * .24f).dp)))
             if (editing && onRemove != null) RemoveBadge(onRemove, Modifier.align(Alignment.TopStart).offset(x = (-7).dp, y = (-7).dp))
+            BadgeDot(LocalBadges.current[app.packageName] ?: 0, Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-6).dp))
         }
         if (labels) Text(app.label, color = Color.White, fontSize = 11.sp, lineHeight = 14.sp, maxLines = 1,
             overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,

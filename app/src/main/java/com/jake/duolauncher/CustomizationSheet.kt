@@ -130,6 +130,32 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     }, "standby-calendar-switch")
                     Text("La météo utilise le lieu choisi dans Apparence, sinon la position approximative.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                    // Notification badges need Android's notification access, granted in system settings.
+                    var badgeAccess by remember { mutableStateOf(BadgeService.hasAccess(context)) }
+                    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+                    DisposableEffect(lifecycle) {
+                        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) badgeAccess = BadgeService.hasAccess(context)
+                        }
+                        lifecycle.addObserver(observer); onDispose { lifecycle.removeObserver(observer) }
+                    }
+                    SettingsSwitch("Pastilles de notification", badgeAccess, {
+                        runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
+                    }, "badges-switch")
+                    Text("Affiche le nombre de notifications sur les icônes. Activez « Pastilles Duo Launcher » dans l’accès aux notifications.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                    val hiddenApps = state.apps.filter { it.id in state.hidden }
+                    Text("Applis masquées", style = MaterialTheme.typography.titleSmall)
+                    if (hiddenApps.isEmpty()) Text("Aucune. Pour masquer une appli : appui long sur son icône, puis « Masquer l’appli ».",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    hiddenApps.forEach { app ->
+                        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(app.label, Modifier.weight(1f))
+                            TextButton(onClick = { model.setHidden(app.id, false) }) { Text("Afficher") }
+                        }
+                    }
                     Text("« Toutes les applis » garde toujours la recherche locale.", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("Balayez latéralement n’importe où sur l’accueil pour changer de page. Balayez vers le bas pour les notifications ou les réglages rapides.",

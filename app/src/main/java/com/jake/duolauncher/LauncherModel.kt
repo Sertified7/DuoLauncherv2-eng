@@ -61,7 +61,11 @@ data class LauncherState(
     val surfaceExpanded: Boolean = false,
     /** The other screen's saved layout; null until the two screens first diverge. */
     val inactive: SurfaceLayout? = null,
+    /** Apps hidden from All apps, search and pickers (they stay installed). */
+    val hidden: Set<String> = emptySet(),
 ) {
+    /** Apps that can be shown to the user (everything except hidden apps). */
+    val visibleApps: List<AppEntry> get() = if (hidden.isEmpty()) apps else apps.filterNot { it.id in hidden }
     val order: List<String> get() = homeSlots.filterNotNull()
     val surface: SurfaceLayout get() = SurfaceLayout(homeSlots, leadingSlots, dock, widgetPlacements, folders, widgetRestores)
     val widgets: List<Int> get() = layout.widgets
@@ -392,6 +396,14 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         commitLayout(com.jake.duolauncher.moveFolderApp(mutable.value.layout, folderId, appId, index))
     fun folder(id: String) = mutable.value.layout.folder(id)
 
+    /** Hides an app from All apps, search and pickers; hiding also takes it off Home, the dock and folders. */
+    fun setHidden(id: String, hide: Boolean) {
+        val next = if (hide) mutable.value.hidden + id else mutable.value.hidden - id
+        prefs.edit().putStringSet("hidden_apps", next).apply()
+        mutable.update { it.copy(hidden = next) }
+        if (hide) commitLayout(reconcileFolders(mutable.value.layout, setOf(id)))
+    }
+
     fun applyImportedLayout(preview: LayoutImportPreview): Boolean {
         if (statePayloadInvalid) return false
         val old = mutable.value
@@ -691,6 +703,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             dock = normalizeDock(active.dock, MAX_DOCK_SLOTS),
             widgetPlacements = active.widgetPlacements, folders = active.folders, widgetRestores = active.widgetRestores,
             surfaceExpanded = j.optString("surface") == "expanded", inactive = inactive,
+            hidden = prefs.getStringSet("hidden_apps", emptySet())?.toSet() ?: emptySet(),
             googleSearch = j.optBoolean("googleSearch", true),
             labels = j.optBoolean("labels", true), compact = preset("compact", LayoutPreset()),
             expanded = preset("expanded", LayoutPreset()), verticalStatus = j.optBoolean("verticalStatus", true))

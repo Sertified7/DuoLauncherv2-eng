@@ -54,8 +54,8 @@ internal fun AppLibrary(
     LaunchedEffect(showWork, selectedProfile?.available, selectedProfile?.quiet) {
         listState.scrollToItem(0)
     }
-    val visibleApps = remember(state.apps, query, showWork, hasWork) {
-        state.apps.filter { (!hasWork || it.isWork == showWork) && it.label.contains(query.trim(), true) }
+    val visibleApps = remember(state.apps, state.hidden, query, showWork, hasWork) {
+        state.visibleApps.filter { (!hasWork || it.isWork == showWork) && it.label.contains(query.trim(), true) }
     }
     val groups = remember(visibleApps) {
         visibleApps.groupBy {

@@ -4,6 +4,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.findViewTreeOnBackPressedDispatcherOwner
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -52,7 +53,12 @@ internal fun LauncherAppActionSheet(app: AppEntry, placed: Boolean, homePages: I
     moving: Boolean, onMoving: (Boolean) -> Unit,
     onAddOrRemove: () -> Unit, onMoveFirst: () -> Unit, onMoveEarlier: () -> Unit, onMoveLater: () -> Unit,
     onMovePage: (Int) -> Unit, onInfo: () -> Unit, onWidgets: (() -> Unit)?, onCreateFolder: () -> Unit,
-    onClose: () -> Unit, onEditHome: (() -> Unit)? = null) {
+    onClose: () -> Unit, onEditHome: (() -> Unit)? = null, onHide: (() -> Unit)? = null) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    // The app's own quick actions ("Nouveau message"…), like iPhone's long-press menu.
+    val shortcuts by produceState(emptyList<AppShortcut>(), app.id) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { loadAppShortcuts(context, app) }
+    }
     ModalDialogBackHandler { if (moving) onMoving(false) else onClose() }
     val maxHeight = with(LocalDensity.current) { (LocalWindowInfo.current.containerSize.height * .88f).toDp() }
     Column(Modifier.fillMaxWidth().heightIn(max = maxHeight).verticalScroll(rememberScrollState())
@@ -75,12 +81,26 @@ internal fun LauncherAppActionSheet(app: AppEntry, placed: Boolean, homePages: I
             repeat(homePages) { page -> ActionRow(Icons.Rounded.GridView, "Déplacer vers la page ${page + 1}",
                 { onMovePage(page) }, Modifier.testTag("app-move-${app.id}-page-$page")) }
         } else {
+            if (shortcuts.isNotEmpty()) {
+                shortcuts.forEach { shortcut ->
+                    Row(Modifier.fillMaxWidth().heightIn(min = 52.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable { if (startAppShortcut(context, shortcut)) onClose() }
+                        .padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        shortcut.icon?.let { Image(it.asImageBitmap(), null, Modifier.size(26.dp).clip(RoundedCornerShape(7.dp))) }
+                            ?: Icon(Icons.Rounded.Bolt, null, Modifier.size(24.dp))
+                        Spacer(Modifier.width(16.dp)); Text(shortcut.label, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+                HorizontalDivider(Modifier.padding(vertical = 6.dp))
+            }
             if (placed) ActionRow(Icons.Rounded.DragIndicator, "Déplacer sur l’accueil", { onMoving(true) })
             else ActionRow(Icons.Rounded.Home, "Ajouter à l’accueil", onAddOrRemove)
             onWidgets?.let { ActionRow(Icons.Rounded.Widgets, "Widgets", it) }
             ActionRow(Icons.Rounded.CreateNewFolder, "Créer un dossier", onCreateFolder)
             onEditHome?.let { ActionRow(Icons.Rounded.Edit, "Modifier l’écran d’accueil", it) }
             ActionRow(Icons.Rounded.Info, "Infos sur l’appli", onInfo)
+            onHide?.let { ActionRow(Icons.Rounded.VisibilityOff, "Masquer l’appli", it) }
             if (placed) {
                 Spacer(Modifier.height(10.dp)); HorizontalDivider(); Spacer(Modifier.height(4.dp))
                 ActionRow(Icons.Rounded.RemoveCircleOutline, "Retirer de l’accueil", onAddOrRemove,
