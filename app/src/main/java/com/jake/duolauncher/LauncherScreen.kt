@@ -161,6 +161,8 @@ fun LauncherScreen(
     LaunchedEffect(sheet) { if (sheet.isEmpty()) customizationPage = CustomizationPage.OVERVIEW }
     var openFolderId by rememberSaveable { mutableStateOf<String?>(null) }
     var createFolderFirstId by rememberSaveable { mutableStateOf<String?>(null) }
+    var editingHome by rememberSaveable { mutableStateOf(false) }
+    var editAnchor by rememberSaveable { mutableStateOf<Int?>(null) }
     var savedPage by rememberSaveable { mutableIntStateOf(0) }
     var lastHomePage by rememberSaveable { mutableIntStateOf(0) }
     var libraryQuery by rememberSaveable { mutableStateOf("") }
@@ -399,6 +401,14 @@ fun LauncherScreen(
         LiveDiscover.homeLayer = homeLayer
         onDispose { if (LiveDiscover.homeLayer === homeLayer) LiveDiscover.homeLayer = null }
     }
+    val editMode = HomeEditMode(editingHome,
+        removeFromHome = { id -> if (isFolderId(id)) Unit else model.setPinned(id, false) },
+        removeFromDock = { index -> model.setDock(index, null) },
+        exit = { editingHome = false; editAnchor = null })
+    // Like iOS: starting to drag an icon puts Home into editing mode.
+    LaunchedEffect(drag.active, drag.moved) { if (drag.active && drag.moved) editingHome = true }
+    BackHandler(enabled = editingHome && sheet.isEmpty() && !drag.active) { editingHome = false; editAnchor = null }
+    CompositionLocalProvider(LocalHomeEditMode provides editMode) {
     Box(Modifier.fillMaxSize().graphicsLayer {
         // The feed frame reuses the pager's render nodes in another window. Give Main
         // a complete render target so cross-window damage cannot erase stationary controls.
@@ -536,7 +546,7 @@ fun LauncherScreen(
                         onTurnOnWork = { model.turnOnWork(it) },
                         onActions = { selectedId = it.id }, onWidget = { widgetSlot = it; sheet = "widgetActions" },
                         onFolder = { openFolderId = it },
-                        onEmptyWidget = { emptyCellIndex = it },
+                        onEmptyWidget = { editAnchor = it; editingHome = true },
                         onRefresh = model::refresh,
                     )
                 }
@@ -563,7 +573,7 @@ fun LauncherScreen(
                                 onLaunch = onLaunchFrom, onActions = { selectedId = it.id },
                                 onWidget = { widgetSlot = it; sheet = "widgetActions" },
                                 onFolder = { openFolderId = it },
-                                onEmptyWidget = { emptyCellIndex = it },
+                                onEmptyWidget = { editAnchor = it; editingHome = true },
                                 onRefresh = model::refresh)
                         }
                     }
@@ -581,9 +591,8 @@ fun LauncherScreen(
                 .width(preset.dockWidth.dp).height(geometry.dockHeight.dp).graphicsLayer {
                     // Composite the stationary dock independently of the shared pager layer.
                     compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
-                }.testTag("dock"),
-                shape = RoundedCornerShape(30.dp), color = Glass.copy(alpha = .32f),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = .3f))) {
+                }.liquidGlass(RoundedCornerShape(30.dp)).testTag("dock"),
+                shape = RoundedCornerShape(30.dp), color = Glass.copy(alpha = .10f)) {
                 Column(Modifier.padding(vertical = 8.dp).verticalScroll(dockScroll)) {
                     DockAppColumn(state.dock, previewLayout.dock, appsById, geometry.dockRowHeight,
                         dockIconSize(geometry.iconSize), drag, insertionTarget,
@@ -1099,7 +1108,8 @@ fun LauncherScreen(
                         widgetProfileSerial = app.userSerial; selectedId = null; sheet = "widgets"
                     }} else null,
                     onCreateFolder = { createFolderFirstId = app.id; selectedId = null },
-                    onClose = { appMoveMenu = false; selectedId = null })
+                    onClose = { appMoveMenu = false; selectedId = null },
+                    onEditHome = { appMoveMenu = false; selectedId = null; editingHome = true })
             }
         }
         emptyCellIndex?.let { index ->
@@ -1194,6 +1204,17 @@ fun LauncherScreen(
                     modifier = Modifier.testTag("widget-reconfigure-cancel")) { Text("Annuler") } })
         }
         }
+    
+        if (editingHome && sheet.isEmpty() && emptyCellIndex == null) HomeEditBar(
+            onAdd = {
+                val page = lastHomePage.coerceIn(0, homePages - 1)
+                val blocked = state.widgetPlacements.flatMapTo(mutableSetOf()) { it.coveredIndices() }
+                emptyCellIndex = editAnchor ?: (0 until HOME_CELLS).map { homeCellIndex(page, it) }
+                    .firstOrNull { it !in blocked && state.layout.slotAt(it) == null } ?: homeCellIndex(page, 0)
+            },
+            onDone = { editingHome = false; editAnchor = null },
+            modifier = Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.statusBars))
+    }
     }
 }
 
@@ -1440,6 +1461,7 @@ private fun SharedHomeGrid(
 ) {
     val rowHeight = geometry.rowHeight
     val iconSize = geometry.iconSize
+    val editMode = LocalHomeEditMode.current
     val pageStart = homeCellIndex(page, 0)
     val pageRange = pageStart until pageStart + HOME_CELLS
     fun savedAt(index: Int) = if (page == -1) savedLeadingSlots.getOrNull(homeCellLocal(index)) else savedSlots.getOrNull(index)
@@ -1488,7 +1510,7 @@ private fun SharedHomeGrid(
                 .dropRegion(drag, cell, savedApp?.id ?: savedFolder?.id, page)
                 // No press highlight: tapping empty Home space must not flash a dark square.
                 .combinedClickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
-                    onClick = { savedFolder?.let { onFolder(it.id) } },
+                    onClick = { if (savedFolder != null) onFolder(savedFolder.id) else if (editMode.active) editMode.exit() },
                     onLongClick = { if (savedId == null && !drag.active) onEmptyWidget(globalIndex) })
                 .background(if (highlighted) Glass.copy(alpha = .25f) else Color.Transparent, RoundedCornerShape(16.dp))
                 .border(if (highlighted) 2.dp else 0.dp,
@@ -1523,7 +1545,8 @@ private fun SharedHomeGrid(
                 Box(Modifier.offset { animatedOffset }.width(cellWidth).height(rowHeight.dp)
                     .alpha(opacity).testTag("home-app-$id"), contentAlignment = Alignment.TopCenter) {
                     if (visible) AppTile(app, iconSize, labels,
-                        onClick = { onLaunch(app, it) }, onLongClick = { onActions(app) })
+                        onClick = { if (!editMode.active) onLaunch(app, it) }, onLongClick = { onActions(app) },
+                        onRemove = { editMode.removeFromHome(app.id) })
                 }
             }
         }
@@ -1576,6 +1599,7 @@ private fun DockAppColumn(
     onLaunch: (AppEntry, android.graphics.Rect?) -> Unit,
     onChoose: (Int) -> Unit,
 ) {
+    val editMode = LocalHomeEditMode.current
     val draggedId = drag.source?.appId
     val dockTarget = (target as? DropTarget.Dock)?.index
     val source = drag.source?.target as? DropTarget.Dock
@@ -1617,7 +1641,8 @@ private fun DockAppColumn(
                 .testTag("dock-slot-$index").dropRegion(drag, cell, savedApp?.id)
                 .semantics(mergeDescendants = true) { contentDescription = savedApp?.label ?: "Choisir l’appli du dock ${index + 1}" }
                 .combinedClickable(interactionSource = interactions[index], indication = LocalIndication.current, role = Role.Button, onClick = {
-                    if (savedApp != null) onLaunch(savedApp, launchBounds[index]) else onChoose(index)
+                    if (editMode.active) { if (savedApp == null) onChoose(index) }
+                    else if (savedApp != null) onLaunch(savedApp, launchBounds[index]) else onChoose(index)
                 }, onLongClick = null)
                 .semantics { onLongClick("Choisir l’appli du dock") { onChoose(index); true } })
         }
@@ -1638,10 +1663,14 @@ private fun DockAppColumn(
                 )
                 Box(Modifier.offset { animatedOffset }.fillMaxWidth().height(rowHeight.dp).alpha(opacity)
                     .testTag("dock-app-$id"), contentAlignment = Alignment.Center) {
-                    Image(app.icon.asImageBitmap(), null, Modifier.size(iconSize.dp).testTag("dock-icon-$id")
-                        .onGloballyPositioned { if (savedIndex >= 0) launchBounds[savedIndex].set(it.boundsInWindow().toAndroidBounds()) }
-                        .graphicsLayer { scaleX = slotScales[renderIndex]; scaleY = slotScales[renderIndex] }
-                        .clip(RoundedCornerShape(11.dp)))
+                    Box(Modifier.homeJiggle(id)) {
+                        Image(app.icon.asImageBitmap(), null, Modifier.size(iconSize.dp).testTag("dock-icon-$id")
+                            .onGloballyPositioned { if (savedIndex >= 0) launchBounds[savedIndex].set(it.boundsInWindow().toAndroidBounds()) }
+                            .graphicsLayer { scaleX = slotScales[renderIndex]; scaleY = slotScales[renderIndex] }
+                            .clip(RoundedCornerShape(11.dp)))
+                        if (editMode.active && savedIndex >= 0) RemoveBadge({ editMode.removeFromDock(savedIndex) },
+                            Modifier.align(Alignment.TopStart).offset(x = (-7).dp, y = (-7).dp))
+                    }
                 }
             }
         }
@@ -1657,8 +1686,8 @@ private fun FolderTile(folder: FolderEntry, apps: Map<String, AppEntry>, size: F
     Column(modifier.clickable(onClick = onClick).semantics(mergeDescendants = true) {
         contentDescription = "Dossier ${folder.title}, ${folder.appIds.size} applis"
     }, horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(size.dp).clip(RoundedCornerShape((size * .24f).dp))
-            .background(Glass.copy(alpha = .72f)).border(1.dp, Color.White.copy(alpha = .55f), RoundedCornerShape((size * .24f).dp))
+        Box(Modifier.homeJiggle(folder.id).size(size.dp).liquidGlass(RoundedCornerShape((size * .24f).dp), 1.4f)
+            .clip(RoundedCornerShape((size * .24f).dp))
             .dropRegion(drag, DropTarget.Folder(folder.id), page = page, folderId = folder.id)
             .testTag("folder-drop-${folder.id}")) {
             folder.appIds.take(4).forEachIndexed { index, id ->
@@ -1675,7 +1704,9 @@ private fun FolderTile(folder: FolderEntry, apps: Map<String, AppEntry>, size: F
 }
 
 @Composable
-private fun AppTile(app: AppEntry, size: Float, labels: Boolean, modifier: Modifier = Modifier, onClick: (android.graphics.Rect) -> Unit, onLongClick: () -> Unit) {
+private fun AppTile(app: AppEntry, size: Float, labels: Boolean, modifier: Modifier = Modifier, onClick: (android.graphics.Rect) -> Unit, onLongClick: () -> Unit,
+    onRemove: (() -> Unit)? = null) {
+    val editing = LocalHomeEditMode.current.active
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) .92f else 1f, label = "app press")
@@ -1686,8 +1717,11 @@ private fun AppTile(app: AppEntry, size: Float, labels: Boolean, modifier: Modif
             role = Role.Button, onClick = { onClick(bounds) })
         .semantics { onLongClick("Options de l’appli") { onLongClick(); true } }.padding(horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
-        Image(app.icon.asImageBitmap(), null, Modifier.size(iconSize).onGloballyPositioned { bounds.set(it.boundsInWindow().toAndroidBounds()) }
-            .graphicsLayer { scaleX = scale; scaleY = scale }.clip(RoundedCornerShape((size * .24f).dp)))
+        Box(Modifier.homeJiggle(app.id)) {
+            Image(app.icon.asImageBitmap(), null, Modifier.size(iconSize).onGloballyPositioned { bounds.set(it.boundsInWindow().toAndroidBounds()) }
+                .graphicsLayer { scaleX = scale; scaleY = scale }.clip(RoundedCornerShape((size * .24f).dp)))
+            if (editing && onRemove != null) RemoveBadge(onRemove, Modifier.align(Alignment.TopStart).offset(x = (-7).dp, y = (-7).dp))
+        }
         if (labels) Text(app.label, color = Color.White, fontSize = 11.sp, lineHeight = 14.sp, maxLines = 1,
             overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
             style = TextStyle(shadow = Shadow(Color.Black.copy(alpha = .55f), Offset(0f, 1f), 3f)), modifier = Modifier.padding(top = 4.dp))
@@ -1696,8 +1730,8 @@ private fun AppTile(app: AppEntry, size: Float, labels: Boolean, modifier: Modif
 
 @Composable
 private fun GlassCard(modifier: Modifier = Modifier, onClick: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
-    Surface(modifier.fillMaxSize().clip(RoundedCornerShape(24.dp)).clickable(onClick = onClick),
-        color = Glass.copy(alpha = .24f), shape = RoundedCornerShape(24.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = .18f))) {
+    Surface(modifier.fillMaxSize().liquidGlass(RoundedCornerShape(24.dp)).clip(RoundedCornerShape(24.dp)).clickable(onClick = onClick),
+        color = Glass.copy(alpha = .10f), shape = RoundedCornerShape(24.dp)) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.SpaceBetween, content = content)
     }
 }

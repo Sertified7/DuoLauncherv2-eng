@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,7 +47,15 @@ internal fun FolderPanel(
         )
         .imePadding().testTag("folder-panel"),
         contentAlignment = Alignment.Center) {
-        Surface(Modifier.fillMaxWidth(.9f).fillMaxHeight(.82f).heightIn(min = 260.dp, max = 620.dp)
+        // iOS-like springy opening.
+        val appear = remember(folder.id) { androidx.compose.animation.core.Animatable(0f) }
+        LaunchedEffect(folder.id) {
+            appear.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = .72f, stiffness = 420f))
+        }
+        Surface(Modifier.graphicsLayer {
+                val p = appear.value
+                scaleX = .86f + .14f * p; scaleY = .86f + .14f * p; alpha = p.coerceIn(0f, 1f)
+            }.fillMaxWidth(.9f).fillMaxHeight(.82f).heightIn(min = 260.dp, max = 620.dp)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,

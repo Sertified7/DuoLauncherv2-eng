@@ -52,7 +52,7 @@ internal fun LauncherAppActionSheet(app: AppEntry, placed: Boolean, homePages: I
     moving: Boolean, onMoving: (Boolean) -> Unit,
     onAddOrRemove: () -> Unit, onMoveFirst: () -> Unit, onMoveEarlier: () -> Unit, onMoveLater: () -> Unit,
     onMovePage: (Int) -> Unit, onInfo: () -> Unit, onWidgets: (() -> Unit)?, onCreateFolder: () -> Unit,
-    onClose: () -> Unit) {
+    onClose: () -> Unit, onEditHome: (() -> Unit)? = null) {
     ModalDialogBackHandler { if (moving) onMoving(false) else onClose() }
     val maxHeight = with(LocalDensity.current) { (LocalWindowInfo.current.containerSize.height * .88f).toDp() }
     Column(Modifier.fillMaxWidth().heightIn(max = maxHeight).verticalScroll(rememberScrollState())
@@ -79,6 +79,7 @@ internal fun LauncherAppActionSheet(app: AppEntry, placed: Boolean, homePages: I
             else ActionRow(Icons.Rounded.Home, "Ajouter à l’accueil", onAddOrRemove)
             onWidgets?.let { ActionRow(Icons.Rounded.Widgets, "Widgets", it) }
             ActionRow(Icons.Rounded.CreateNewFolder, "Créer un dossier", onCreateFolder)
+            onEditHome?.let { ActionRow(Icons.Rounded.Edit, "Modifier l’écran d’accueil", it) }
             ActionRow(Icons.Rounded.Info, "Infos sur l’appli", onInfo)
             if (placed) {
                 Spacer(Modifier.height(10.dp)); HorizontalDivider(); Spacer(Modifier.height(4.dp))
