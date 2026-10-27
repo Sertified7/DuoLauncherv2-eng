@@ -611,7 +611,7 @@ fun LauncherScreen(
             }
             // Unfold "page" shading: the left half starts dark at the hinge and lights up as the page opens,
             // so the book-like unfold is visible even when the left page has no icons.
-            if (geometry.expanded) Box(Modifier.align(Alignment.CenterStart).fillMaxHeight().width(maxWidth / 2)
+            if (geometry.expanded) Box(Modifier.align(Alignment.CenterStart).fillMaxHeight().width(this@BoxWithConstraints.maxWidth / 2)
                 .graphicsLayer {
                     val p = foldProgress().coerceIn(0f, 1f)
                     alpha = (1f - p)
