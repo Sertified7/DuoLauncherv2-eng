@@ -469,15 +469,24 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         if (old.surfaceExpanded == expanded) return
         val current = old.surface
         val next = old.inactive ?: current
+        // The dock is shared by both screens; only Home pages, folders and widgets differ.
+        // An app now in the dock leaves the incoming screen's Home so it never shows twice.
+        val docked = old.dock.filterNotNull().toSet()
         undoLayout = null
         undoImportSettings = null
-        mutable.value = old.copy(homeSlots = next.homeSlots, leadingSlots = next.leadingSlots, dock = next.dock,
+        mutable.value = old.copy(homeSlots = normalizeHomeSlots(next.homeSlots.map { it?.takeUnless(docked::contains) }),
+            leadingSlots = next.leadingSlots.map { it?.takeUnless(docked::contains) }, dock = old.dock,
             widgetPlacements = next.widgetPlacements, folders = next.folders, widgetRestores = next.widgetRestores,
             surfaceExpanded = expanded, inactive = current, canUndoEdit = false, editRevision = old.editRevision + 1)
         persist()
+        // Temporary confirmation while the per-screen layouts are being tested on the device.
+        val screen = if (expanded) "l’écran interne" else "l’écran externe"
+        android.widget.Toast.makeText(getApplication(),
+            if (old.inactive == null) "Accueil de $screen créé (copie)" else "Accueil de $screen",
+            android.widget.Toast.LENGTH_SHORT).show()
     }
 
-    /** Changes how many dock slots the current screen has. Apps in removed slots stay in All apps. */
+    /** Changes how many slots the shared dock has. Apps in removed slots stay in All apps. */
     fun setDockSize(size: Int) {
         if (statePayloadInvalid) return
         val target = size.coerceIn(MIN_DOCK_SLOTS, MAX_DOCK_SLOTS)
@@ -550,7 +559,8 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         }
         val data = surface(s.surface, JSONObject()).put("labels", s.labels)
             .put("surface", if (s.surfaceExpanded) "expanded" else "compact")
-            .apply { s.inactive?.let { put("inactive", surface(it, JSONObject())) } }
+            // The other screen's copy of the shared dock is never used, so it is stored empty.
+            .apply { s.inactive?.let { put("inactive", surface(it.copy(dock = List(s.dock.size) { null }), JSONObject())) } }
             .put("googleSearch", s.googleSearch)
             .put("verticalStatus", s.verticalStatus)
             .put("compact", preset(s.compact)).put("expanded", preset(s.expanded))

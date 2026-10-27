@@ -263,20 +263,16 @@ private fun HelpSection(icon: ImageVector, title: String, detail: String) {
     }
 }
 
-/** Dock slot count belongs to a screen's own layout, so it can only be changed on the screen being shown. */
-@Composable internal fun DockSizeSetting(state: LauncherState, wide: Boolean, model: LauncherModel) {
-    if (wide == state.surfaceExpanded) {
-        val size = state.dock.size
-        Column {
-            Row { Text("Emplacements du dock", Modifier.weight(1f)); Text("$size", color = MaterialTheme.colorScheme.primary) }
-            Slider(size.toFloat(), { model.setDockSize(kotlin.math.round(it).toInt()) },
-                valueRange = MIN_DOCK_SLOTS.toFloat()..MAX_DOCK_SLOTS.toFloat(), steps = MAX_DOCK_SLOTS - MIN_DOCK_SLOTS - 1,
-                modifier = Modifier.semantics { contentDescription = "Emplacements du dock" })
-        }
-    } else {
-        Text(if (wide) "Ouvrez le téléphone pour régler le dock de l’écran interne."
-            else "Fermez le téléphone pour régler le dock de l’écran externe.",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+/** The dock is shared by both screens, so its slot count applies to both. */
+@Composable internal fun DockSizeSetting(state: LauncherState, @Suppress("UNUSED_PARAMETER") wide: Boolean, model: LauncherModel) {
+    val size = state.dock.size
+    Column {
+        Row { Text("Emplacements du dock", Modifier.weight(1f)); Text("$size", color = MaterialTheme.colorScheme.primary) }
+        Slider(size.toFloat(), { model.setDockSize(kotlin.math.round(it).toInt()) },
+            valueRange = MIN_DOCK_SLOTS.toFloat()..MAX_DOCK_SLOTS.toFloat(), steps = MAX_DOCK_SLOTS - MIN_DOCK_SLOTS - 1,
+            modifier = Modifier.semantics { contentDescription = "Emplacements du dock" })
+        Text("Le dock est le même sur les deux écrans.", style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
