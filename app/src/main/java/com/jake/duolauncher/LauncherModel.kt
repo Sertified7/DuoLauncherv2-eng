@@ -47,7 +47,7 @@ data class LauncherState(
     val leadingSlots: List<String?> = List(HOME_CELLS) { null },
     val editRevision: Int = 0,
     val canUndoEdit: Boolean = false,
-    val dock: List<String?> = List(4) { null },
+    val dock: List<String?> = List(DEFAULT_DOCK_SLOTS) { null },
     val widgetPlacements: List<WidgetPlacement> = DEFAULT_WIDGET_PLACEMENTS,
     val widgetRestores: List<WidgetRestore> = emptyList(),
     val googleSearch: Boolean = true,
@@ -57,12 +57,33 @@ data class LauncherState(
     val verticalStatus: Boolean = true,
     val loading: Boolean = true,
     val error: String? = null,
+    /** Which screen the editable fields above belong to: the inner (expanded) or cover (compact) screen. */
+    val surfaceExpanded: Boolean = false,
+    /** The other screen's saved layout; null until the two screens first diverge. */
+    val inactive: SurfaceLayout? = null,
 ) {
     val order: List<String> get() = homeSlots.filterNotNull()
+    val surface: SurfaceLayout get() = SurfaceLayout(homeSlots, leadingSlots, dock, widgetPlacements, folders, widgetRestores)
     val widgets: List<Int> get() = layout.widgets
     val layout: HomeLayout get() = HomeLayout(homeSlots, dock, widgetPlacements, folders, widgetRestores, leadingSlots)
     val homePages get() = layout.pageCount
 }
+
+/** Everything that makes up one screen's Home: pages, unfolded-only page, dock, widgets and folders. */
+data class SurfaceLayout(
+    val homeSlots: List<String?> = emptyList(),
+    val leadingSlots: List<String?> = List(HOME_CELLS) { null },
+    val dock: List<String?> = List(DEFAULT_DOCK_SLOTS) { null },
+    val widgetPlacements: List<WidgetPlacement> = DEFAULT_WIDGET_PLACEMENTS,
+    val folders: List<FolderEntry> = emptyList(),
+    val widgetRestores: List<WidgetRestore> = emptyList(),
+)
+
+fun HomeLayout.toSurface() = SurfaceLayout(slots, leadingSlots, dock, widgetPlacements, folders, widgetRestores)
+
+const val DEFAULT_DOCK_SLOTS = 4
+const val MIN_DOCK_SLOTS = 2
+const val MAX_DOCK_SLOTS = 8
 
 class LauncherModel(application: Application) : AndroidViewModel(application) {
     private data class RefreshedApps(val entries: List<AppEntry>, val profiles: List<AppProfile>,
@@ -204,16 +225,26 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                     val pins = if (sourceSchema < 6 && needsMigration) migrateSchema5Apps(legacyPins) else legacyPins
                     val availableIds = entries.mapTo(mutableSetOf(), AppEntry::id)
                     val authoritative = apps.authoritativeProfiles
+                    val inactive = old.inactive
                     val removedIds = removedAppIds(old.homeSlots.filterNotNull() + old.leadingSlots.filterNotNull() +
-                        old.dock.filterNotNull() + old.folders.flatMap { it.appIds }, availableIds,
+                        old.dock.filterNotNull() + old.folders.flatMap { it.appIds } +
+                        (inactive?.let { it.homeSlots.filterNotNull() + it.leadingSlots.filterNotNull() +
+                            it.dock.filterNotNull() + it.folders.flatMap { folder -> folder.appIds } } ?: emptyList()),
+                        availableIds,
                         authoritative, temporarilyUnavailable, removed, userManager.getSerialNumberForUser(Process.myUserHandle()),
                         apps.removedProfiles)
                     val validPins = pins.map { it?.takeUnless(removedIds::contains) }
                     val validDock = dock.map { it?.takeUnless(removedIds::contains) }
                     val reconciled = reconcileFolders(HomeLayout(validPins, validDock, old.widgetPlacements, old.folders,
                         old.widgetRestores, old.leadingSlots), removedIds)
+                    val reconciledInactive = inactive?.let { other ->
+                        reconcileFolders(HomeLayout(other.homeSlots.map { it?.takeUnless(removedIds::contains) },
+                            other.dock.map { it?.takeUnless(removedIds::contains) }, other.widgetPlacements, other.folders,
+                            other.widgetRestores, other.leadingSlots.map { it?.takeUnless(removedIds::contains) }), removedIds)
+                            .toSurface()
+                    }
                     old.copy(apps = entries, profiles = profiles, homeSlots = reconciled.slots, leadingSlots = reconciled.leadingSlots,
-                        dock = reconciled.dock, folders = reconciled.folders,
+                        dock = reconciled.dock, folders = reconciled.folders, inactive = reconciledInactive,
                         canUndoEdit = old.canUndoEdit && old.layout == reconciled, loading = false,
                         error = if (statePayloadInvalid) old.error else null)
                 }
@@ -426,7 +457,42 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         mutable.update { if (expanded) it.copy(expanded = value.sanitized(), canUndoEdit = false) else it.copy(compact = value.sanitized(), canUndoEdit = false) }
         persist()
     }
+    /**
+     * Switches the editable layout to the inner (expanded) or cover (compact) screen. Each screen keeps its
+     * own pages, dock, folders and widgets; the first switch copies the current layout so nothing is lost.
+     */
+    fun setSurface(expanded: Boolean) {
+        val old = mutable.value
+        if (old.surfaceExpanded == expanded) return
+        val current = old.surface
+        val next = old.inactive ?: current
+        undoLayout = null
+        undoImportSettings = null
+        mutable.value = old.copy(homeSlots = next.homeSlots, leadingSlots = next.leadingSlots, dock = next.dock,
+            widgetPlacements = next.widgetPlacements, folders = next.folders, widgetRestores = next.widgetRestores,
+            surfaceExpanded = expanded, inactive = current, canUndoEdit = false, editRevision = old.editRevision + 1)
+        persist()
+    }
+
+    /** Changes how many dock slots the current screen has. Apps in removed slots stay in All apps. */
+    fun setDockSize(size: Int) {
+        if (statePayloadInvalid) return
+        val target = size.coerceIn(MIN_DOCK_SLOTS, MAX_DOCK_SLOTS)
+        val old = mutable.value
+        if (old.dock.size == target) return
+        undoLayout = null
+        undoImportSettings = null
+        val dock = if (target > old.dock.size) old.dock + List(target - old.dock.size) { null } else {
+            // Keep the apps that are already placed by packing them toward the top before trimming.
+            val apps = old.dock.filterNotNull()
+            (apps + List(maxOf(0, old.dock.size - apps.size)) { null }).take(target)
+        }
+        mutable.value = old.copy(dock = dock, canUndoEdit = false, editRevision = old.editRevision + 1)
+        persist()
+    }
+
     val retainedWidgetIds get() = (mutable.value.widgetPlacements.map { it.id } +
+        mutable.value.inactive?.widgetPlacements.orEmpty().map { it.id } +
         (if (mutable.value.canUndoEdit) undoLayout?.first?.widgetPlacements.orEmpty().map { it.id } else emptyList())).filter { it >= 0 }.toSet()
     val canPruneWidgetIds get() = !statePayloadInvalid
     fun setWidget(slot: Int, id: Int) {
@@ -464,20 +530,24 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         val s = mutable.value
         fun preset(p: LayoutPreset) = JSONObject().put("iconSize", p.iconSize).put("rowGap", p.rowGap)
             .put("dockWidth", p.dockWidth).put("dockPosition", p.dockPosition).put("dockAlignToGrid", p.dockAlignToGrid)
-        val widgets = JSONArray().also { array -> s.widgetPlacements.forEach { w -> array.put(JSONObject()
-            .put("slot", w.slot).put("id", w.id).put("page", w.page).put("column", w.column).put("row", w.row)
-            .put("spanX", w.spanX).put("spanY", w.spanY)) } }
-        val folders = JSONArray().also { array -> s.folders.forEach { folder -> array.put(JSONObject()
-            .put("id", folder.id).put("title", folder.title).put("apps", JSONArray(folder.appIds))) } }
-        val restores = JSONArray().also { array -> s.widgetRestores.forEach { restore -> array.put(JSONObject()
-            .put("slot", restore.slot).put("provider", restore.providerComponent).put("userSerial", restore.userSerial)
-            .put("title", restore.title).put("profileLabel", restore.profileLabel).put("work", restore.isWork)
-            .put("sourceScope", restore.sourceScope)) } }
-        val data = JSONObject().put("schema", 8).put("pinned", JSONArray(s.order)).put("homeSlots", JSONArray(s.homeSlots))
-            .put("leadingSlots", JSONArray(s.leadingSlots)).put("dock", JSONArray(s.dock))
-            .put("widgets", widgets).put("labels", s.labels)
-            .put("folders", folders)
-            .put("restores", restores)
+        fun surface(layout: SurfaceLayout, target: JSONObject): JSONObject {
+            val widgets = JSONArray().also { array -> layout.widgetPlacements.forEach { w -> array.put(JSONObject()
+                .put("slot", w.slot).put("id", w.id).put("page", w.page).put("column", w.column).put("row", w.row)
+                .put("spanX", w.spanX).put("spanY", w.spanY)) } }
+            val folders = JSONArray().also { array -> layout.folders.forEach { folder -> array.put(JSONObject()
+                .put("id", folder.id).put("title", folder.title).put("apps", JSONArray(folder.appIds))) } }
+            val restores = JSONArray().also { array -> layout.widgetRestores.forEach { restore -> array.put(JSONObject()
+                .put("slot", restore.slot).put("provider", restore.providerComponent).put("userSerial", restore.userSerial)
+                .put("title", restore.title).put("profileLabel", restore.profileLabel).put("work", restore.isWork)
+                .put("sourceScope", restore.sourceScope)) } }
+            return target.put("schema", 8).put("pinned", JSONArray(layout.homeSlots.filterNotNull()))
+                .put("homeSlots", JSONArray(layout.homeSlots))
+                .put("leadingSlots", JSONArray(layout.leadingSlots)).put("dock", JSONArray(layout.dock))
+                .put("widgets", widgets).put("folders", folders).put("restores", restores)
+        }
+        val data = surface(s.surface, JSONObject()).put("labels", s.labels)
+            .put("surface", if (s.surfaceExpanded) "expanded" else "compact")
+            .apply { s.inactive?.let { put("inactive", surface(it, JSONObject())) } }
             .put("googleSearch", s.googleSearch)
             .put("verticalStatus", s.verticalStatus)
             .put("compact", preset(s.compact)).put("expanded", preset(s.expanded))
@@ -508,113 +578,124 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                 p.optBoolean("dockAlignToGrid", true)).sanitized()
             return upgradePreset(loaded, j.optInt("schema", 1), key == "expanded")
         }
-        val order = j.optJSONArray(if (j.optInt("schema", 1) >= 2) "pinned" else "order") ?: JSONArray()
-        val cells = j.optJSONArray("homeSlots").takeIf { j.optInt("schema", 1) >= 4 } ?: order
-        val schema = j.optInt("schema", 1)
-        require(schema <= 8) { "Unsupported saved-state schema $schema" }
-        val rawSlots = List(cells.length()) { cells.optString(it).takeIf { id -> id.isNotBlank() && id != "null" } }
-        val legacySlots = normalizeHomeSlots(rawSlots)
-        val rawLeadingSlots = if (schema >= 8) {
-            val leading = j.optJSONArray("leadingSlots") ?: error("Schema 8 requires a leading slot array")
-            require(leading.length() == HOME_CELLS)
-            List(HOME_CELLS) { leading.optString(it).takeIf { id -> id.isNotBlank() && id != "null" } }
-        } else List(HOME_CELLS) { null }
-        val loadedDock = List(4) { j.optJSONArray("dock")?.optString(it)?.takeIf { it.isNotBlank() && it != "null" } }
-        val widgetArray = j.optJSONArray("widgets")
-        val placements = if (schema >= 6) {
-            require(widgetArray != null) { "Schema $schema requires a widget placement array" }
-            fun strictInt(objectValue: JSONObject, key: String): Int {
-                val number = objectValue.get(key) as? Number ?: error("$key must be an integer")
-                val value = number.toDouble()
-                require(value.isFinite() && value % 1.0 == 0.0 && value >= Int.MIN_VALUE && value <= Int.MAX_VALUE) {
-                    "$key must be a finite integer"
+        fun parseSurface(j: JSONObject): SurfaceLayout {
+            val order = j.optJSONArray(if (j.optInt("schema", 1) >= 2) "pinned" else "order") ?: JSONArray()
+            val cells = j.optJSONArray("homeSlots").takeIf { j.optInt("schema", 1) >= 4 } ?: order
+            val schema = j.optInt("schema", 1)
+            require(schema <= 8) { "Unsupported saved-state schema $schema" }
+            val rawSlots = List(cells.length()) { cells.optString(it).takeIf { id -> id.isNotBlank() && id != "null" } }
+            val legacySlots = normalizeHomeSlots(rawSlots)
+            val rawLeadingSlots = if (schema >= 8) {
+                val leading = j.optJSONArray("leadingSlots") ?: error("Schema 8 requires a leading slot array")
+                require(leading.length() == HOME_CELLS)
+                List(HOME_CELLS) { leading.optString(it).takeIf { id -> id.isNotBlank() && id != "null" } }
+            } else List(HOME_CELLS) { null }
+            val dockArray = j.optJSONArray("dock")
+            val dockSize = (dockArray?.length() ?: DEFAULT_DOCK_SLOTS).coerceIn(MIN_DOCK_SLOTS, MAX_DOCK_SLOTS)
+            val loadedDock = List(dockSize) { dockArray?.optString(it)?.takeIf { it.isNotBlank() && it != "null" } }
+            val widgetArray = j.optJSONArray("widgets")
+            val placements = if (schema >= 6) {
+                require(widgetArray != null) { "Schema $schema requires a widget placement array" }
+                fun strictInt(objectValue: JSONObject, key: String): Int {
+                    val number = objectValue.get(key) as? Number ?: error("$key must be an integer")
+                    val value = number.toDouble()
+                    require(value.isFinite() && value % 1.0 == 0.0 && value >= Int.MIN_VALUE && value <= Int.MAX_VALUE) {
+                        "$key must be a finite integer"
+                    }
+                    return value.toInt()
                 }
-                return value.toInt()
-            }
-            List(widgetArray.length()) { index ->
-                val w = widgetArray.getJSONObject(index)
-                WidgetPlacement(strictInt(w, "slot"), strictInt(w, "id"), strictInt(w, "page"), strictInt(w, "column"), strictInt(w, "row"),
-                    strictInt(w, "spanX"), strictInt(w, "spanY"))
-            }.also { loaded ->
-                require(loaded.map { it.slot }.distinct().size == loaded.size) { "Widget placement slots must be unique" }
-                loaded.forEach { placement ->
-                    val baseGeometry = placement.slot >= 0 && placement.id != EMPTY_WIDGET && placement.page >= -1 &&
-                        placement.column >= 0 && placement.row >= 0 && placement.spanX in 1..GRID_COLUMNS &&
-                        placement.spanY in 1..GRID_ROWS && placement.column + placement.spanX <= GRID_COLUMNS
-                    val insideGrid = placement.row + placement.spanY <= GRID_ROWS
-                    val migratedOverflow = placement.page > 0 && placement.slot / 3 == placement.page && placement.slot % 3 == 2 &&
-                        placement.column == 0 && placement.row == GRID_ROWS && placement.spanX == GRID_COLUMNS && placement.spanY == 4
-                    require(baseGeometry && (insideGrid || migratedOverflow)) { "Invalid widget placement" }
+                List(widgetArray.length()) { index ->
+                    val w = widgetArray.getJSONObject(index)
+                    WidgetPlacement(strictInt(w, "slot"), strictInt(w, "id"), strictInt(w, "page"), strictInt(w, "column"), strictInt(w, "row"),
+                        strictInt(w, "spanX"), strictInt(w, "spanY"))
+                }.also { loaded ->
+                    require(loaded.map { it.slot }.distinct().size == loaded.size) { "Widget placement slots must be unique" }
+                    loaded.forEach { placement ->
+                        val baseGeometry = placement.slot >= 0 && placement.id != EMPTY_WIDGET && placement.page >= -1 &&
+                            placement.column >= 0 && placement.row >= 0 && placement.spanX in 1..GRID_COLUMNS &&
+                            placement.spanY in 1..GRID_ROWS && placement.column + placement.spanX <= GRID_COLUMNS
+                        val insideGrid = placement.row + placement.spanY <= GRID_ROWS
+                        val migratedOverflow = placement.page > 0 && placement.slot / 3 == placement.page && placement.slot % 3 == 2 &&
+                            placement.column == 0 && placement.row == GRID_ROWS && placement.spanX == GRID_COLUMNS && placement.spanY == 4
+                        require(baseGeometry && (insideGrid || migratedOverflow)) { "Invalid widget placement" }
+                    }
                 }
-            }
-        } else {
-            val ids = if (schema < 5) List(3) { index ->
-                (widgetArray?.optInt(index, -1) ?: -1).let {
-                    if (it < 0) listOf(CLOCK_WIDGET, DATE_WIDGET, INFO_WIDGET)[index] else it
+            } else {
+                val ids = if (schema < 5) List(3) { index ->
+                    (widgetArray?.optInt(index, -1) ?: -1).let {
+                        if (it < 0) listOf(CLOCK_WIDGET, DATE_WIDGET, INFO_WIDGET)[index] else it
+                    }
+                } else List(widgetArray?.length() ?: 0) { widgetArray!!.optInt(it, EMPTY_WIDGET) }
+                migrateSchema5Widgets(ids)
+            }.filterNot { placement -> schema < 8 && placement == WidgetPlacement(2, INFO_WIDGET, -1, 0, 0, 4, 6) }
+            val folders = if (schema >= 7) {
+                val array = j.optJSONArray("folders") ?: error("Schema 7 requires a folder array")
+                List(array.length()) { index ->
+                    val item = array.getJSONObject(index)
+                    val apps = item.getJSONArray("apps")
+                    FolderEntry(item.getString("id"), item.getString("title"), List(apps.length()) { apps.getString(it) })
+                }.also { loaded ->
+                    require(loaded.map(FolderEntry::id).distinct().size == loaded.size)
+                    require(loaded.flatMap(FolderEntry::appIds).distinct().size == loaded.sumOf { it.appIds.size })
+                    loaded.forEach { folder ->
+                        require(isFolderId(folder.id) && folder.title.isNotBlank() && folder.appIds.size >= 2)
+                        require(folder.appIds.none { it.isBlank() || isReservedFolderId(it) })
+                    }
+                    val children = loaded.flatMapTo(mutableSetOf(), FolderEntry::appIds)
+                    val folderIds = loaded.mapTo(mutableSetOf(), FolderEntry::id)
+                    val rawFolderRefs = (rawSlots + rawLeadingSlots).filterNotNull().filter(::isReservedFolderId)
+                    require(rawFolderRefs.all(::isFolderId))
+                    require(rawFolderRefs.size == folderIds.size && rawFolderRefs.toSet() == folderIds)
+                    require((rawSlots + rawLeadingSlots).none { it in children } &&
+                        loadedDock.none { it in children || (it != null && isReservedFolderId(it)) })
                 }
-            } else List(widgetArray?.length() ?: 0) { widgetArray!!.optInt(it, EMPTY_WIDGET) }
-            migrateSchema5Widgets(ids)
-        }.filterNot { placement -> schema < 8 && placement == WidgetPlacement(2, INFO_WIDGET, -1, 0, 0, 4, 6) }
-        val folders = if (schema >= 7) {
-            val array = j.optJSONArray("folders") ?: error("Schema 7 requires a folder array")
-            List(array.length()) { index ->
-                val item = array.getJSONObject(index)
-                val apps = item.getJSONArray("apps")
-                FolderEntry(item.getString("id"), item.getString("title"), List(apps.length()) { apps.getString(it) })
-            }.also { loaded ->
-                require(loaded.map(FolderEntry::id).distinct().size == loaded.size)
-                require(loaded.flatMap(FolderEntry::appIds).distinct().size == loaded.sumOf { it.appIds.size })
-                loaded.forEach { folder ->
-                    require(isFolderId(folder.id) && folder.title.isNotBlank() && folder.appIds.size >= 2)
-                    require(folder.appIds.none { it.isBlank() || isReservedFolderId(it) })
+            } else emptyList()
+            if (schema >= 8) {
+                val leadingIds = rawLeadingSlots.filterNotNull()
+                require(leadingIds.distinct().size == leadingIds.size) {
+                    "An unfolded-only shortcut appears more than once"
                 }
-                val children = loaded.flatMapTo(mutableSetOf(), FolderEntry::appIds)
-                val folderIds = loaded.mapTo(mutableSetOf(), FolderEntry::id)
-                val rawFolderRefs = (rawSlots + rawLeadingSlots).filterNotNull().filter(::isReservedFolderId)
-                require(rawFolderRefs.all(::isFolderId))
-                require(rawFolderRefs.size == folderIds.size && rawFolderRefs.toSet() == folderIds)
-                require((rawSlots + rawLeadingSlots).none { it in children } &&
-                    loadedDock.none { it in children || (it != null && isReservedFolderId(it)) })
+                val leadingApps = leadingIds.filterNot(::isReservedFolderId)
+                val otherApps = rawSlots.filterNotNull().filterNot(::isReservedFolderId) +
+                    loadedDock.filterNotNull() + folders.flatMap(FolderEntry::appIds)
+                require(leadingApps.none { it in otherApps }) {
+                    "An unfolded-only app shortcut appears on another surface"
+                }
+                val occupiedLeadingCells = rawLeadingSlots.indices
+                    .filterTo(mutableSetOf()) { rawLeadingSlots[it] != null }
+                    .mapTo(mutableSetOf()) { homeCellIndex(-1, it) }
+                require(placements.filter { it.page == -1 }.none { placement ->
+                    placement.coveredIndices().any { it in occupiedLeadingCells }
+                }) { "An unfolded-only shortcut overlaps a widget" }
             }
-        } else emptyList()
-        if (schema >= 8) {
-            val leadingIds = rawLeadingSlots.filterNotNull()
-            require(leadingIds.distinct().size == leadingIds.size) {
-                "An unfolded-only shortcut appears more than once"
-            }
-            val leadingApps = leadingIds.filterNot(::isReservedFolderId)
-            val otherApps = rawSlots.filterNotNull().filterNot(::isReservedFolderId) +
-                loadedDock.filterNotNull() + folders.flatMap(FolderEntry::appIds)
-            require(leadingApps.none { it in otherApps }) {
-                "An unfolded-only app shortcut appears on another surface"
-            }
-            val occupiedLeadingCells = rawLeadingSlots.indices
-                .filterTo(mutableSetOf()) { rawLeadingSlots[it] != null }
-                .mapTo(mutableSetOf()) { homeCellIndex(-1, it) }
-            require(placements.filter { it.page == -1 }.none { placement ->
-                placement.coveredIndices().any { it in occupiedLeadingCells }
-            }) { "An unfolded-only shortcut overlaps a widget" }
+            val restores = if (schema >= 7) {
+                val array = j.optJSONArray("restores") ?: JSONArray()
+                List(array.length()) { index ->
+                    val item = array.getJSONObject(index)
+                    WidgetRestore(item.getInt("slot"), item.getString("provider"), item.getLong("userSerial"),
+                        item.getString("title"), item.getString("profileLabel"), item.optBoolean("work", false),
+                        item.optString("sourceScope").takeIf { it.isNotBlank() && it != "null" })
+                }.also { loaded ->
+                    require(loaded.map(WidgetRestore::slot).distinct().size == loaded.size)
+                    loaded.forEach { restore ->
+                        require(restore.slot >= 0 && restore.userSerial >= 0 && restore.title.isNotBlank() &&
+                            restore.profileLabel.isNotBlank() && ComponentName.unflattenFromString(restore.providerComponent) != null)
+                    }
+                    require(placements.filter { it.id == NEEDS_BINDING_WIDGET }.map { it.slot }.toSet() == loaded.map { it.slot }.toSet())
+                }
+            } else emptyList()
+            return SurfaceLayout(homeSlots = if (schema in 2..5) migrateSchema5Apps(legacySlots) else legacySlots,
+                leadingSlots = rawLeadingSlots, dock = loadedDock, widgetPlacements = placements, folders = folders,
+                widgetRestores = restores)
         }
-        val restores = if (schema >= 7) {
-            val array = j.optJSONArray("restores") ?: JSONArray()
-            List(array.length()) { index ->
-                val item = array.getJSONObject(index)
-                WidgetRestore(item.getInt("slot"), item.getString("provider"), item.getLong("userSerial"),
-                    item.getString("title"), item.getString("profileLabel"), item.optBoolean("work", false),
-                    item.optString("sourceScope").takeIf { it.isNotBlank() && it != "null" })
-            }.also { loaded ->
-                require(loaded.map(WidgetRestore::slot).distinct().size == loaded.size)
-                loaded.forEach { restore ->
-                    require(restore.slot >= 0 && restore.userSerial >= 0 && restore.title.isNotBlank() &&
-                        restore.profileLabel.isNotBlank() && ComponentName.unflattenFromString(restore.providerComponent) != null)
-                }
-                require(placements.filter { it.id == NEEDS_BINDING_WIDGET }.map { it.slot }.toSet() == loaded.map { it.slot }.toSet())
-            }
-        } else emptyList()
-        LauncherState(homeSlots = if (schema in 2..5) migrateSchema5Apps(legacySlots) else legacySlots,
-            leadingSlots = rawLeadingSlots,
-            dock = loadedDock,
-            widgetPlacements = placements, folders = folders, widgetRestores = restores,
+        val active = parseSurface(j)
+        // A damaged second-screen layout must never block the main one: fall back to sharing it.
+        val inactive = j.optJSONObject("inactive")?.let { runCatching { parseSurface(it) }.getOrNull() }
+        LauncherState(homeSlots = active.homeSlots,
+            leadingSlots = active.leadingSlots,
+            dock = active.dock,
+            widgetPlacements = active.widgetPlacements, folders = active.folders, widgetRestores = active.widgetRestores,
+            surfaceExpanded = j.optString("surface") == "expanded", inactive = inactive,
             googleSearch = j.optBoolean("googleSearch", true),
             labels = j.optBoolean("labels", true), compact = preset("compact", LayoutPreset()),
             expanded = preset("expanded", LayoutPreset()), verticalStatus = j.optBoolean("verticalStatus", true))
