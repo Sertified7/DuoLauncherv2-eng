@@ -55,7 +55,8 @@ fun homeGeometry(width: Float, height: Float, preset: LayoutPreset, labels: Bool
     val contentTop = ((height - widget - 18f - 4f * row - homeBottomSpace) / 2f).coerceIn(16f, 72f)
     // Search reclaims the redundant bottom controls' space for all four dock apps.
     // Extremely short windows still scroll rather than reduce touch targets below 48dp.
-    val topLimit = maxOf(8f, statusHeight)
+    // The status rail starts at contentTop, so the dock must stay below contentTop + its height.
+    val topLimit = maxOf(8f, if (statusHeight > 0f) contentTop + statusHeight else 0f)
     val bottomReserve = if (inLibrary) 12f else 124f
     // Outer dock edges span the first through third icon images, excluding the last label.
     val desiredHeight = (if (p.dockAlignToGrid) 2f * row + icon else 256f) * slots / 4f
