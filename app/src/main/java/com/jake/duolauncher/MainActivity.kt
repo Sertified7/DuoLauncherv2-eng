@@ -44,6 +44,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var setupExperience: SetupExperience
     private lateinit var status: DeviceStatusMonitor
     private lateinit var appearance: AppearanceStore
+    private val standBy by lazy { StandByTrigger(this) }
     private var appearanceLocationGeneration = 0
     private var appearancePermissionGeneration = -1
     private var appearanceLocationCancellation: CancellationSignal? = null
@@ -97,7 +98,7 @@ class MainActivity : ComponentActivity() {
                     onLaunch = { launchApp(it) }, onMakeDefault = ::makeDefault, onAppInfo = ::appInfo,
                     isDefaultHome = defaultHome.value, deviceStatus = deviceStatus, onStatusMode = ::setStatusMode, onWallpaperPreview = ::previewWallpaper,
                     onDiscover = ::openDiscover, searchRequests = searchRequests.intValue,
-                    onLaunchFrom = ::launchApp, onGoogleSearch = ::openGoogleSearch,
+                    onLaunchFrom = ::launchApp, onLaunchPair = ::launchPair, onGoogleSearch = ::openGoogleSearch,
                     appearance = appearance.state,
                     onAppearanceMode = { cancelAppearanceLocation(); appearance.setMode(it, systemDark()) },
                     onAppearanceManual = { place, lat, lon -> cancelAppearanceLocation(); appearance.setManual(place, lat, lon, systemDark()) },
@@ -137,8 +138,10 @@ class MainActivity : ComponentActivity() {
         cancelAppearanceLocation()
         super.onDestroy()
     }
+    override fun onPause() { standBy.stop(); super.onPause() }
     override fun onResume() {
         super.onResume()
+        standBy.start()
         if (returningFromShadeSettings) {
             returningFromShadeSettings = false
             releaseShadeSetupOwnership()
@@ -235,6 +238,29 @@ class MainActivity : ComponentActivity() {
                 ?: throw IllegalStateException("Profil indisponible")
             getSystemService(LauncherApps::class.java).startMainActivity(app.component, user, screenBounds(bounds), launchOptions(bounds))
         } catch (_: Exception) { Toast.makeText(this, "${app.label} est indisponible.", Toast.LENGTH_SHORT).show(); model.refresh() }
+    }
+
+    /**
+     * Opens an app pair: the first app normally, then the second "adjacent" to it, which asks Android
+     * (and One UI) to show both side by side. On the cover screen only the first app opens.
+     */
+    private fun launchPair(first: AppEntry, second: AppEntry) {
+        launchApp(first)
+        if (resources.configuration.screenWidthDp < 650) return
+        window.decorView.postDelayed({ launchAdjacent(second) }, 350)
+    }
+
+    private fun launchAdjacent(app: AppEntry) {
+        try {
+            val users = getSystemService(UserManager::class.java)
+            val user = users.getUserForSerialNumber(app.userSerial) ?: throw IllegalStateException("Profil indisponible")
+            if (user == android.os.Process.myUserHandle()) {
+                startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setComponent(app.component)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT or Intent.FLAG_ACTIVITY_MULTIPLE_TASK))
+            } else {
+                getSystemService(LauncherApps::class.java).startMainActivity(app.component, user, null, null)
+            }
+        } catch (_: Exception) { Toast.makeText(this, "${app.label} est indisponible.", Toast.LENGTH_SHORT).show() }
     }
 
     private fun screenBounds(bounds: android.graphics.Rect?): android.graphics.Rect? = bounds?.takeUnless { it.isEmpty }?.let {

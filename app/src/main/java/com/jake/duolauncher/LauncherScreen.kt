@@ -126,6 +126,7 @@ fun LauncherScreen(
     isDefaultHome: Boolean, deviceStatus: DeviceStatus, onStatusMode: (Boolean) -> Unit, onWallpaperPreview: () -> Unit,
     onDiscover: () -> Unit = {}, searchRequests: Int = 0,
     onLaunchFrom: (AppEntry, android.graphics.Rect?) -> Unit = { app, _ -> onLaunch(app) },
+    onLaunchPair: (AppEntry, AppEntry) -> Unit = { first, _ -> onLaunch(first) },
     onGoogleSearch: (android.graphics.Rect?) -> Boolean = { false },
     appearance: AppearanceState = AppearanceState(),
     onAppearanceMode: (AppearanceMode) -> Unit = {},
@@ -161,6 +162,7 @@ fun LauncherScreen(
     LaunchedEffect(sheet) { if (sheet.isEmpty()) customizationPage = CustomizationPage.OVERVIEW }
     var openFolderId by rememberSaveable { mutableStateOf<String?>(null) }
     var createFolderFirstId by rememberSaveable { mutableStateOf<String?>(null) }
+    var createAsPair by rememberSaveable { mutableStateOf(false) }
     var savedPage by rememberSaveable { mutableIntStateOf(0) }
     var lastHomePage by rememberSaveable { mutableIntStateOf(0) }
     var libraryQuery by rememberSaveable { mutableStateOf("") }
@@ -297,6 +299,13 @@ fun LauncherScreen(
     } else if (selectedId != null) selectedId = null else { focus.clearFocus(); scope.launch { pager.animateScrollToPage(0) } } }
     val openDiscover = { if (firstHome > 0) scope.launch { pager.animateScrollToPage(-1) } else onDiscover(); Unit }
     val openLibrary = { scope.launch { pager.animateScrollToPage(homePages) }; Unit }
+    // App pairs open both apps side by side; ordinary folders open their panel.
+    val openFolderOrPair: (String) -> Unit = { id ->
+        val pair = state.folders.firstOrNull { it.id == id }?.takeIf { it.isPair }
+        val first = pair?.appIds?.getOrNull(0)?.let(appsById::get)
+        val second = pair?.appIds?.getOrNull(1)?.let(appsById::get)
+        if (first != null && second != null) onLaunchPair(first, second) else openFolderId = id
+    }
 
     val dragWindowPage = if (expandedWorkspace && (drag.active || widgetSession != null)) pager.settledPage else pager.currentPage
     val eligibleDragPages = remember(expandedWorkspace, dragWindowPage, visibleHomePages) {
@@ -535,7 +544,7 @@ fun LauncherScreen(
                         onLaunch = onLaunch, onLaunchFrom = onLaunchFrom, onPinned = model::setPinned,
                         onTurnOnWork = { model.turnOnWork(it) },
                         onActions = { selectedId = it.id }, onWidget = { widgetSlot = it; sheet = "widgetActions" },
-                        onFolder = { openFolderId = it },
+                        onFolder = openFolderOrPair,
                         onEmptyWidget = { emptyCellIndex = it },
                         onRefresh = model::refresh,
                     )
@@ -562,7 +571,7 @@ fun LauncherScreen(
                                 bottomSpace, widgets, drag, target, insertionTarget, showLargeWidget = false,
                                 onLaunch = onLaunchFrom, onActions = { selectedId = it.id },
                                 onWidget = { widgetSlot = it; sheet = "widgetActions" },
-                                onFolder = { openFolderId = it },
+                                onFolder = openFolderOrPair,
                                 onEmptyWidget = { emptyCellIndex = it },
                                 onRefresh = model::refresh)
                         }
@@ -1113,8 +1122,14 @@ fun LauncherScreen(
         }
         createFolderFirstId?.let { firstId ->
             val first = appsById[firstId]
-            AlertDialog(onDismissRequest = { createFolderFirstId = null }, title = { Text("Créer un dossier avec ${first?.label ?: "l’appli"}") },
-                text = { LazyColumn(Modifier.heightIn(max = 420.dp).testTag("folder-app-picker")) {
+            AlertDialog(onDismissRequest = { createFolderFirstId = null },
+                title = { Text(if (createAsPair) "Paire d’applis avec ${first?.label ?: "l’appli"}" else "Créer un dossier avec ${first?.label ?: "l’appli"}") },
+                text = { Column {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Paire d’applis : les ouvrir côte à côte", Modifier.weight(1f))
+                    Switch(createAsPair, { createAsPair = it })
+                }
+                LazyColumn(Modifier.heightIn(max = 420.dp).testTag("folder-app-picker")) {
                     items(state.apps.filter { it.id != firstId && it.available }, key = { it.id }) { second ->
                         TextButton(onClick = {
                             val preferredPage = state.layout.indexOfShortcut(firstId)?.let(::homeCellPage)
@@ -1122,13 +1137,17 @@ fun LauncherScreen(
                             val blocked = state.widgetPlacements.flatMapTo(mutableSetOf()) { it.coveredIndices() }
                             val targetIndex = (0 until HOME_CELLS).map { homeCellIndex(preferredPage, it) }
                                 .firstOrNull { it !in blocked && state.layout.slotAt(it) in listOf(null, firstId, second.id) }
-                            if (targetIndex != null) model.createFolder(firstId, second.id, targetIndex)
-                            createFolderFirstId = null
+                            if (targetIndex != null) {
+                                val title = if (createAsPair) "${first?.label ?: ""} + ${second.label}" else "Dossier"
+                                val created = model.createFolder(firstId, second.id, targetIndex, title)
+                                if (createAsPair && created != null) model.setFolderPair(created, true)
+                            }
+                            createFolderFirstId = null; createAsPair = false
                         }, modifier = Modifier.fillMaxWidth().testTag("folder-app-${second.id}")) {
                             Text(second.label, Modifier.fillMaxWidth())
                         }
                     }
-                } }, confirmButton = { TextButton(onClick = { createFolderFirstId = null }) { Text("Annuler") } })
+                } } }, confirmButton = { TextButton(onClick = { createFolderFirstId = null; createAsPair = false }) { Text("Annuler") } })
         }
         openFolderId?.let { id ->
             state.folders.firstOrNull { it.id == id }?.let { folder ->
@@ -1141,6 +1160,7 @@ fun LauncherScreen(
                 FolderPanel(folder, appsById, drag, pager.currentPage, homeDestinations,
                     dockVacancies = state.dock.indices.filter { state.dock[it] == null },
                     onDismiss = { openFolderId = null }, onRename = { model.renameFolder(id, it) },
+                    onPairChange = { model.setFolderPair(id, it) },
                     onLaunch = onLaunchFrom,
                     onMoveOut = { appId, destination ->
                         if (model.removeAppFromFolder(id, appId, destination)) openFolderId = model.folder(id)?.id
@@ -1649,8 +1669,22 @@ private fun <T> List<T>.slicePage(range: IntRange): List<T> =
 private fun FolderTile(folder: FolderEntry, apps: Map<String, AppEntry>, size: Float, labels: Boolean,
     drag: HomeDragState, page: Int, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Column(modifier.clickable(onClick = onClick).semantics(mergeDescendants = true) {
-        contentDescription = "Dossier ${folder.title}, ${folder.appIds.size} applis"
+        contentDescription = if (folder.isPair) "Paire d’applis ${folder.title}" else "Dossier ${folder.title}, ${folder.appIds.size} applis"
     }, horizontalAlignment = Alignment.CenterHorizontally) {
+        if (folder.isPair) {
+            // Two overlapping icons, like an iPhone Duo app pair.
+            Box(Modifier.size(size.dp)
+                .dropRegion(drag, DropTarget.Folder(folder.id), page = page, folderId = folder.id)
+                .testTag("pair-${folder.id}")) {
+                folder.appIds.forEachIndexed { index, id ->
+                    apps[id]?.let { app ->
+                        Image(app.icon.asImageBitmap(), null, Modifier.align(if (index == 0) Alignment.TopStart else Alignment.BottomEnd)
+                            .size((size * .68f).dp).clip(RoundedCornerShape((size * .17f).dp))
+                            .border(1.5.dp, Color.White.copy(alpha = .8f), RoundedCornerShape((size * .17f).dp)))
+                    }
+                }
+            }
+        } else
         Box(Modifier.size(size.dp).clip(RoundedCornerShape((size * .24f).dp))
             .background(Glass.copy(alpha = .72f)).border(1.dp, Color.White.copy(alpha = .55f), RoundedCornerShape((size * .24f).dp))
             .dropRegion(drag, DropTarget.Folder(folder.id), page = page, folderId = folder.id)

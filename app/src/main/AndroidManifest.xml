@@ -39,6 +39,11 @@
             <meta-data android:name="android.accessibilityservice"
                 android:resource="@xml/system_shade_accessibility_service" />
         </service>
+        <activity android:name=".StandByActivity" android:exported="false"
+            android:theme="@style/Theme.Duo.StandBy" android:screenOrientation="sensorLandscape"
+            android:showWhenLocked="true" android:excludeFromRecents="true" android:taskAffinity=""
+            android:launchMode="singleInstance"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
         <activity android:name=".MainActivity" android:exported="true"
             android:launchMode="singleTask" android:resizeableActivity="true"
             android:windowSoftInputMode="adjustResize">

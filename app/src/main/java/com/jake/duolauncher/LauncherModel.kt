@@ -374,7 +374,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         return commitLayout(dropApp(old.layout, id, target))
     }
 
-    fun createFolder(firstAppId: String, secondAppId: String, targetIndex: Int, title: String = "Folder"): String? {
+    fun createFolder(firstAppId: String, secondAppId: String, targetIndex: Int, title: String = "Dossier"): String? {
         val installed = mutable.value.apps.mapTo(mutableSetOf(), AppEntry::id)
         if (firstAppId !in installed || secondAppId !in installed) return null
         val id = newFolderId()
@@ -391,6 +391,10 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     fun moveFolderApp(folderId: String, appId: String, index: Int) =
         commitLayout(com.jake.duolauncher.moveFolderApp(mutable.value.layout, folderId, appId, index))
     fun folder(id: String) = mutable.value.layout.folder(id)
+    fun setFolderPair(folderId: String, pair: Boolean): Boolean {
+        val layout = mutable.value.layout
+        return commitLayout(layout.copy(folders = layout.folders.map { if (it.id == folderId) it.copy(pair = pair) else it }))
+    }
 
     fun applyImportedLayout(preview: LayoutImportPreview): Boolean {
         if (statePayloadInvalid) return false
@@ -479,11 +483,6 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             widgetPlacements = next.widgetPlacements, folders = next.folders, widgetRestores = next.widgetRestores,
             surfaceExpanded = expanded, inactive = current, canUndoEdit = false, editRevision = old.editRevision + 1)
         persist()
-        // Temporary confirmation while the per-screen layouts are being tested on the device.
-        val screen = if (expanded) "l’écran interne" else "l’écran externe"
-        android.widget.Toast.makeText(getApplication(),
-            if (old.inactive == null) "Accueil de $screen créé (copie)" else "Accueil de $screen",
-            android.widget.Toast.LENGTH_SHORT).show()
     }
 
     /** Changes how many slots the shared dock has. Apps in removed slots stay in All apps. */
@@ -547,7 +546,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                 .put("slot", w.slot).put("id", w.id).put("page", w.page).put("column", w.column).put("row", w.row)
                 .put("spanX", w.spanX).put("spanY", w.spanY)) } }
             val folders = JSONArray().also { array -> layout.folders.forEach { folder -> array.put(JSONObject()
-                .put("id", folder.id).put("title", folder.title).put("apps", JSONArray(folder.appIds))) } }
+                .put("id", folder.id).put("title", folder.title).put("apps", JSONArray(folder.appIds)).put("pair", folder.pair)) } }
             val restores = JSONArray().also { array -> layout.widgetRestores.forEach { restore -> array.put(JSONObject()
                 .put("slot", restore.slot).put("provider", restore.providerComponent).put("userSerial", restore.userSerial)
                 .put("title", restore.title).put("profileLabel", restore.profileLabel).put("work", restore.isWork)
@@ -646,7 +645,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                 List(array.length()) { index ->
                     val item = array.getJSONObject(index)
                     val apps = item.getJSONArray("apps")
-                    FolderEntry(item.getString("id"), item.getString("title"), List(apps.length()) { apps.getString(it) })
+                    FolderEntry(item.getString("id"), item.getString("title"), List(apps.length()) { apps.getString(it) }, item.optBoolean("pair", false))
                 }.also { loaded ->
                     require(loaded.map(FolderEntry::id).distinct().size == loaded.size)
                     require(loaded.flatMap(FolderEntry::appIds).distinct().size == loaded.sumOf { it.appIds.size })

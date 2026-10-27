@@ -114,6 +114,11 @@ internal fun CustomizationSheet(state: LauncherState, initiallyWide: Boolean, mo
                     SettingsSwitch("Afficher le nom des applis", state.labels, model::setLabels, "label-switch")
                     SettingsSwitch("Afficher l’état en haut à droite", state.verticalStatus, model::setVerticalStatus, "status-switch")
                     SettingsSwitch("Le bouton Recherche ouvre Google", state.googleSearch, model::setGoogleSearch, "google-search-switch")
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    var standBy by remember { mutableStateOf(isStandByEnabled(context)) }
+                    SettingsSwitch("Mode StandBy", standBy, { standBy = it; setStandByEnabled(context, it) }, "standby-switch")
+                    Text("Écran externe, en charge et posé debout à l’horizontale : grande horloge, batterie et réveil. Touchez pour quitter.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("« Toutes les applis » garde toujours la recherche locale.", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("Balayez latéralement n’importe où sur l’accueil pour changer de page. Balayez vers le bas pour les notifications ou les réglages rapides.",

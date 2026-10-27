@@ -4,7 +4,10 @@ import java.util.UUID
 
 private const val FOLDER_PREFIX = "folder:"
 
-data class FolderEntry(val id: String, val title: String, val appIds: List<String>)
+data class FolderEntry(val id: String, val title: String, val appIds: List<String>, val pair: Boolean = false) {
+    /** An app pair opens its two apps side by side instead of opening the folder (like iPhone Duo app pairs). */
+    val isPair: Boolean get() = pair && appIds.size == 2
+}
 
 fun newFolderId(): String = FOLDER_PREFIX + UUID.randomUUID()
 fun isReservedFolderId(id: String) = id.startsWith(FOLDER_PREFIX)

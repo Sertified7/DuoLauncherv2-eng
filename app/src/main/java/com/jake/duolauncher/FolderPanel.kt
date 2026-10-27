@@ -30,6 +30,7 @@ internal fun FolderPanel(
     homeDestinations: List<Int>, dockVacancies: List<Int>, onDismiss: () -> Unit,
     onRename: (String) -> Unit, onLaunch: (AppEntry, android.graphics.Rect?) -> Unit,
     onMoveOut: (String, DropTarget) -> Unit,
+    onPairChange: (Boolean) -> Unit = {},
 ) {
     var title by rememberSaveable(folder.id) { mutableStateOf(folder.title) }
     BackHandler { onDismiss() }
@@ -59,7 +60,16 @@ internal fun FolderPanel(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(title, { title = it }, Modifier.weight(1f).testTag("folder-name"),
                         singleLine = true, label = { Text("Nom du dossier") })
-                    TextButton(onClick = { if (title.isNotBlank()) onRename(title); onDismiss() }) { Text("Done") }
+                    TextButton(onClick = { if (title.isNotBlank()) onRename(title); onDismiss() }) { Text("OK") }
+                }
+                if (folder.appIds.size == 2) Row(Modifier.fillMaxWidth().padding(top = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Paire d’applis")
+                        Text("Un appui ouvre les deux applis côte à côte. Appui long pour revenir ici.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(folder.pair, onPairChange, Modifier.testTag("folder-pair-switch"))
                 }
                 LazyVerticalGrid(GridCells.Adaptive(88.dp), Modifier.fillMaxWidth().weight(1f).padding(top = 12.dp),
                     contentPadding = PaddingValues(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
