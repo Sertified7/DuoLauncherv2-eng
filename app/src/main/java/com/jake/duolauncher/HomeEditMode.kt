@@ -103,3 +103,21 @@ internal fun Modifier.liquidGlass(shape: androidx.compose.ui.graphics.Shape, str
         listOf(Color.White.copy(alpha = .30f * strength), Color.White.copy(alpha = .10f * strength))), shape))
     .then(Modifier.border(1.dp, androidx.compose.ui.graphics.Brush.verticalGradient(
         listOf(Color.White.copy(alpha = .78f), Color.White.copy(alpha = .14f))), shape))
+
+/** Progress (0→1) of the fold/unfold entrance; read inside graphicsLayer so it never recomposes the grid. */
+internal val LocalFoldReveal = staticCompositionLocalOf<() -> Float> { { 1f } }
+
+/**
+ * Entrance played after folding or unfolding: icons fade and grow in one after another. On the inner
+ * screen they also slide out from the hinge side, so the Home appears to unfold with the phone.
+ */
+@Composable
+internal fun Modifier.foldReveal(order: Int, fromHinge: Boolean): Modifier {
+    val progress = LocalFoldReveal.current
+    return graphicsLayer {
+        val p = (progress() * 1.6f - order * .045f).coerceIn(0f, 1f)
+        alpha = p
+        scaleX = .82f + .18f * p; scaleY = .82f + .18f * p
+        if (fromHinge) translationX = (1f - p) * -140.dp.toPx()
+    }
+}

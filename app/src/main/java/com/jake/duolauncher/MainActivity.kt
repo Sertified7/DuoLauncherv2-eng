@@ -89,7 +89,7 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null && intent.getStringExtra("duo_destination") == "search") searchRequests.intValue++
         intent.removeExtra("duo_destination")
         // Pick the inner- or cover-screen layout before the first frame so the wrong one never flashes.
-        model.setSurface(resources.configuration.screenWidthDp >= 650)
+        val foldChanged = model.setSurface(resources.configuration.screenWidthDp >= 650)
         setContent {
             val state = model.state.collectAsStateWithLifecycle().value
             val deviceStatus = status.state.collectAsStateWithLifecycle().value
@@ -105,7 +105,7 @@ class MainActivity : ComponentActivity() {
                     onAppearanceDeviceLocation = ::useAppearanceLocation,
                     onAppearanceClear = { cancelAppearanceLocation(); appearance.clearLocation(systemDark()) },
                     showFirstRun = showFirstRun.value,
-                    onFinishFirstRun = ::finishFirstRun,
+                    onFinishFirstRun = ::finishFirstRun, playFoldAnimation = foldChanged,
                     onShadeSetup = ::showShadeSetup)
             }
         }

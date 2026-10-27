@@ -465,9 +465,9 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
      * Switches the editable layout to the inner (expanded) or cover (compact) screen. Each screen keeps its
      * own pages, dock, folders and widgets; the first switch copies the current layout so nothing is lost.
      */
-    fun setSurface(expanded: Boolean) {
+    fun setSurface(expanded: Boolean): Boolean {
         val old = mutable.value
-        if (old.surfaceExpanded == expanded) return
+        if (old.surfaceExpanded == expanded) return false
         val current = old.surface
         val stored = old.inactive ?: current
         val next = HomeLayout(stored.homeSlots, old.dock, stored.widgetPlacements, stored.folders, stored.widgetRestores,
@@ -482,6 +482,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             widgetPlacements = next.widgetPlacements, folders = next.folders, widgetRestores = next.widgetRestores,
             surfaceExpanded = expanded, inactive = current, canUndoEdit = false, editRevision = old.editRevision + 1)
         persist()
+        return true
     }
 
     val retainedWidgetIds get() = (mutable.value.widgetPlacements.map { it.id } +
