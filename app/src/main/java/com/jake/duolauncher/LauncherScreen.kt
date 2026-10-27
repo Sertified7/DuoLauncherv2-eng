@@ -176,6 +176,10 @@ fun LauncherScreen(
     }
     val appsById = remember(state.apps) { state.apps.associateBy { it.id } }
     val drag = remember { HomeDragState() }
+    // The dock shows only its apps; the empty "+" slot appears while dragging or editing (or when empty).
+    val dockApps = state.dock.count { it != null }
+    val showDockSpace = drag.active || editingHome || dockApps == 0
+    val visibleDock = if (showDockSpace) state.dock else state.dock.filterNotNull()
     val folderOwnsInput = openFolderId != null || drag.source?.folderId != null
     DisposableEffect(folderOwnsInput) {
         if (folderOwnsInput) LiveDiscover.setExternalResultPending(launcherActivity, "main", "folder-panel", true)
@@ -434,7 +438,7 @@ fun LauncherScreen(
             val geometry = homeGeometry(maxWidth.value, maxHeight.value, preset, state.labels,
                 statusHeight = if (state.verticalStatus) statusHeight + 22f else 0f,
                 labelHeight = with(density) { 14.sp.toDp().value } + 6f, inLibrary = inLibrary,
-                homeBottomSpace = if (isDefaultHome) 44f else 88f, dockSlots = state.dock.size)
+                homeBottomSpace = if (isDefaultHome) 44f else 88f, dockSlots = visibleDock.size)
             // Each screen keeps its own layout: switch to it as soon as the window size says which screen we're on.
             SideEffect { if (state.surfaceExpanded != geometry.expanded) model.setSurface(geometry.expanded) }
             SideEffect {
@@ -594,7 +598,7 @@ fun LauncherScreen(
                 }.liquidGlass(RoundedCornerShape(30.dp)).testTag("dock"),
                 shape = RoundedCornerShape(30.dp), color = Glass.copy(alpha = .10f)) {
                 Column(Modifier.padding(vertical = 8.dp).verticalScroll(dockScroll)) {
-                    DockAppColumn(state.dock, previewLayout.dock, appsById, geometry.dockRowHeight,
+                    DockAppColumn(visibleDock, previewLayout.dock, appsById, geometry.dockRowHeight,
                         dockIconSize(geometry.iconSize), drag, insertionTarget,
                         onLaunch = onLaunchFrom, onChoose = { dockSlot = it; sheet = "dock" })
                 }

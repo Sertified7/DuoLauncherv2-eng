@@ -124,8 +124,17 @@ fun HomeLayout.deduplicated(): HomeLayout {
     val result = copy(
         slots = slotsOut.map(::resolve).dropLastWhile { it == null },
         leadingSlots = leadingOut.map(::resolve),
-        dock = dockOut.map { it?.takeUnless(inFolders::contains) },
+        dock = normalizeDock(dockOut.map { it?.takeUnless(inFolders::contains) }),
         folders = foldersOut.filter { it.appIds.size >= 2 },
     )
     return if (result == this) this else result
+}
+
+/**
+ * The dock sizes itself to its apps, like on iPhone: apps are packed at the top and one empty slot is kept
+ * at the end (while there's room) so an app can always be dropped in. Up to [MAX_DOCK_SLOTS] apps.
+ */
+fun normalizeDock(dock: List<String?>, maxSlots: Int = 8): List<String?> {
+    val apps = dock.filterNotNull().distinct().take(maxSlots)
+    return if (apps.size < maxSlots) apps + listOf(null) else apps
 }

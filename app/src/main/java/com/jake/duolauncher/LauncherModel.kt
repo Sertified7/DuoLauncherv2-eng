@@ -85,7 +85,7 @@ fun profileName(label: String) = when (label) { "Personal" -> "personnel"; "Work
 fun HomeLayout.toSurface() = SurfaceLayout(slots, leadingSlots, dock, widgetPlacements, folders, widgetRestores)
 
 const val DEFAULT_DOCK_SLOTS = 4
-const val MIN_DOCK_SLOTS = 2
+const val MIN_DOCK_SLOTS = 1
 const val MAX_DOCK_SLOTS = 8
 
 class LauncherModel(application: Application) : AndroidViewModel(application) {
@@ -349,9 +349,9 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         mutable.update { old -> old.copy(canUndoEdit = false,
             homeSlots = if (id == null) old.homeSlots else old.homeSlots.map { it?.takeUnless(id::equals) }.dropLastWhile { it == null },
             leadingSlots = if (id == null) old.leadingSlots else old.leadingSlots.map { it?.takeUnless(id::equals) },
-            dock = old.dock.mapIndexed { index, value ->
+            dock = normalizeDock(old.dock.mapIndexed { index, value ->
                 when { index == slot -> id; value == id && id != null -> null; else -> value }
-            }) }
+            }, MAX_DOCK_SLOTS)) }
         persist()
     }
 
@@ -481,23 +481,6 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             leadingSlots = next.leadingSlots.map { it?.takeUnless(docked::contains) }, dock = old.dock,
             widgetPlacements = next.widgetPlacements, folders = next.folders, widgetRestores = next.widgetRestores,
             surfaceExpanded = expanded, inactive = current, canUndoEdit = false, editRevision = old.editRevision + 1)
-        persist()
-    }
-
-    /** Changes how many slots the shared dock has. Apps in removed slots stay in All apps. */
-    fun setDockSize(size: Int) {
-        if (statePayloadInvalid) return
-        val target = size.coerceIn(MIN_DOCK_SLOTS, MAX_DOCK_SLOTS)
-        val old = mutable.value
-        if (old.dock.size == target) return
-        undoLayout = null
-        undoImportSettings = null
-        val dock = if (target > old.dock.size) old.dock + List(target - old.dock.size) { null } else {
-            // Keep the apps that are already placed by packing them toward the top before trimming.
-            val apps = old.dock.filterNotNull()
-            (apps + List(maxOf(0, old.dock.size - apps.size)) { null }).take(target)
-        }
-        mutable.value = old.copy(dock = dock, canUndoEdit = false, editRevision = old.editRevision + 1)
         persist()
     }
 
@@ -704,7 +687,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         val inactive = j.optJSONObject("inactive")?.let { runCatching { parseSurface(it) }.getOrNull() }
         LauncherState(homeSlots = active.homeSlots,
             leadingSlots = active.leadingSlots,
-            dock = active.dock,
+            dock = normalizeDock(active.dock, MAX_DOCK_SLOTS),
             widgetPlacements = active.widgetPlacements, folders = active.folders, widgetRestores = active.widgetRestores,
             surfaceExpanded = j.optString("surface") == "expanded", inactive = inactive,
             googleSearch = j.optBoolean("googleSearch", true),
