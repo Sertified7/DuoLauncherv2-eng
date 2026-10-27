@@ -416,8 +416,8 @@ fun LauncherScreen(
     // Fold/unfold entrance: plays once when this screen's layout was just switched in.
     val foldReveal = remember { androidx.compose.animation.core.Animatable(if (playFoldAnimation) 0f else 1f) }
     LaunchedEffect(Unit) {
-        if (foldReveal.value < 1f) foldReveal.animateTo(1f, androidx.compose.animation.core.tween(900,
-            easing = androidx.compose.animation.core.FastOutSlowInEasing))
+        if (foldReveal.value < 1f) foldReveal.animateTo(1f, androidx.compose.animation.core.spring(
+            dampingRatio = .82f, stiffness = 140f))
     }
     val foldProgress: () -> Float = { foldReveal.value }
     CompositionLocalProvider(LocalHomeEditMode provides editMode, LocalFoldReveal provides foldProgress) {
@@ -1323,7 +1323,7 @@ private fun ExpandedWorkspace(
         if (showLeading) {
             key("expanded-leading-home") {
                 Box(Modifier.place(leadingX).width((geometry.gridWidth + 16f).dp).fillMaxHeight()
-                    .testTag("expanded-leading-home")) {
+                    .foldDoor().testTag("expanded-leading-home")) {
                     HomePagePane(
                         -1, state, previewSlots, previewLeadingSlots, previewWidgetPlacements, appsById, geometry, contentHeight, bottomSpace,
                         widgets, drag, target, insertionTarget, showLargeWidget = true,
@@ -1554,7 +1554,7 @@ private fun SharedHomeGrid(
                     if (dimDragged && id == draggedId) .28f else 1f,
                     label = "home insertion visibility $id",
                 )
-                Box(Modifier.offset { animatedOffset }.foldReveal(localIndex % GRID_COLUMNS + row, geometry.expanded).width(cellWidth).height(rowHeight.dp)
+                Box(Modifier.offset { animatedOffset }.foldReveal(localIndex % GRID_COLUMNS + row, !geometry.expanded).width(cellWidth).height(rowHeight.dp)
                     .alpha(opacity).testTag("home-app-$id"), contentAlignment = Alignment.TopCenter) {
                     if (visible) AppTile(app, iconSize, labels,
                         onClick = { if (!editMode.active) onLaunch(app, it) }, onLongClick = { onActions(app) },
@@ -1573,7 +1573,7 @@ private fun SharedHomeGrid(
             val x = cellWidth * (localIndex % GRID_COLUMNS)
             val y = rowTop(row).dp
             FolderTile(folder, appsById, iconSize, labels, drag, page,
-                Modifier.offset(x = x, y = y).foldReveal(localIndex % GRID_COLUMNS + row, geometry.expanded).width(cellWidth).height(rowHeight.dp)
+                Modifier.offset(x = x, y = y).foldReveal(localIndex % GRID_COLUMNS + row, !geometry.expanded).width(cellWidth).height(rowHeight.dp)
                     .testTag("home-folder-${folder.id}"), onClick = { onFolder(folder.id) })
         }
         pageWidgets.forEach { placement ->
@@ -1673,7 +1673,7 @@ private fun DockAppColumn(
                     if (!visible) 0f else if (dimDragged && id == draggedId) .28f else 1f,
                     label = "dock insertion visibility $id",
                 )
-                Box(Modifier.offset { animatedOffset }.foldReveal(renderIndex + 2, false).fillMaxWidth().height(rowHeight.dp).alpha(opacity)
+                Box(Modifier.offset { animatedOffset }.foldReveal(renderIndex + 2, true).fillMaxWidth().height(rowHeight.dp).alpha(opacity)
                     .testTag("dock-app-$id"), contentAlignment = Alignment.Center) {
                     Box(Modifier.homeJiggle(id)) {
                         Image(app.icon.asImageBitmap(), null, Modifier.size(iconSize.dp).testTag("dock-icon-$id")

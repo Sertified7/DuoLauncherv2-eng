@@ -108,16 +108,33 @@ internal fun Modifier.liquidGlass(shape: androidx.compose.ui.graphics.Shape, str
 internal val LocalFoldReveal = staticCompositionLocalOf<() -> Float> { { 1f } }
 
 /**
- * Entrance played after folding or unfolding: icons fade and grow in one after another. On the inner
- * screen they also slide out from the hinge side, so the Home appears to unfold with the phone.
+ * Cover-screen entrance after folding: icons fade and grow in one after another.
  */
 @Composable
-internal fun Modifier.foldReveal(order: Int, fromHinge: Boolean): Modifier {
+internal fun Modifier.foldReveal(order: Int, enabled: Boolean): Modifier {
+    if (!enabled) return this
     val progress = LocalFoldReveal.current
     return graphicsLayer {
         val p = (progress() * 1.6f - order * .045f).coerceIn(0f, 1f)
         alpha = p
-        scaleX = .82f + .18f * p; scaleY = .82f + .18f * p
-        if (fromHinge) translationX = (1f - p) * -140.dp.toPx()
+        scaleX = .86f + .14f * p; scaleY = .86f + .14f * p
+    }
+}
+
+/**
+ * Unfolding like the iPhone Duo: what was on the cover stays put on the right, while the left page
+ * swings open from the hinge like a book page (3D rotation around its hinge-side edge).
+ */
+@Composable
+internal fun Modifier.foldDoor(): Modifier {
+    val progress = LocalFoldReveal.current
+    return graphicsLayer {
+        val p = progress().coerceIn(0f, 1f)
+        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, .5f)
+        cameraDistance = 14f * density
+        rotationY = (1f - p) * -88f
+        alpha = (p * 2.5f).coerceIn(0f, 1f)
+        // A touch of shade while the page is still turned away from the light.
+        scaleY = .96f + .04f * p
     }
 }
