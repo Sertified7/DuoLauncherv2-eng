@@ -4,10 +4,7 @@ import java.util.UUID
 
 private const val FOLDER_PREFIX = "folder:"
 
-data class FolderEntry(val id: String, val title: String, val appIds: List<String>, val pair: Boolean = false) {
-    /** An app pair opens its two apps side by side instead of opening the folder (like iPhone Duo app pairs). */
-    val isPair: Boolean get() = pair && appIds.size == 2
-}
+data class FolderEntry(val id: String, val title: String, val appIds: List<String>)
 
 fun newFolderId(): String = FOLDER_PREFIX + UUID.randomUUID()
 fun isReservedFolderId(id: String) = id.startsWith(FOLDER_PREFIX)
@@ -97,3 +94,38 @@ fun reconcileFolders(layout: HomeLayout, removedAppIds: Set<String>): HomeLayout
 
 private fun widgetCellsForFolders(layout: HomeLayout) = layout.widgetPlacements
     .flatMapTo(mutableSetOf()) { it.coveredIndices() }
+
+/**
+ * Repairs a layout so every app and folder shows up exactly once: folders must be referenced once and
+ * own distinct apps, and an app inside a folder is never also a separate shortcut. Applied whenever a
+ * layout is committed or loaded, so a damaged state can't leave duplicate or immovable icons.
+ */
+fun HomeLayout.deduplicated(): HomeLayout {
+    val folderById = folders.associateBy(FolderEntry::id)
+    val seenShortcuts = mutableSetOf<String>()
+    fun keepOnce(id: String?) = id?.takeIf { (!isReservedFolderId(it) || it in folderById) && seenShortcuts.add(it) }
+    val dockOut = dock.map { id -> id?.takeUnless(::isReservedFolderId)?.let(::keepOnce) }
+    val slotsOut = slots.map(::keepOnce)
+    val leadingOut = leadingSlots.map(::keepOnce)
+    val referenced = seenShortcuts.filterTo(mutableSetOf(), ::isReservedFolderId)
+    val claimed = mutableSetOf<String>()
+    val foldersOut = folders.filter { it.id in referenced }.map { folder ->
+        folder.copy(appIds = folder.appIds.filter { it !in dockOut && claimed.add(it) })
+    }
+    val inFolders = foldersOut.flatMapTo(mutableSetOf(), FolderEntry::appIds)
+    val byId = foldersOut.associateBy(FolderEntry::id)
+    // A folder left with one app becomes that app; an empty folder disappears.
+    fun resolve(id: String?): String? = when {
+        id == null -> null
+        isReservedFolderId(id) -> byId[id]?.appIds?.let { apps -> when (apps.size) { 0 -> null; 1 -> apps.single(); else -> id } }
+        id in inFolders -> null
+        else -> id
+    }
+    val result = copy(
+        slots = slotsOut.map(::resolve).dropLastWhile { it == null },
+        leadingSlots = leadingOut.map(::resolve),
+        dock = dockOut.map { it?.takeUnless(inFolders::contains) },
+        folders = foldersOut.filter { it.appIds.size >= 2 },
+    )
+    return if (result == this) this else result
+}

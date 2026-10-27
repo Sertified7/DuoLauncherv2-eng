@@ -239,7 +239,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                     val validPins = pins.map { it?.takeUnless(removedIds::contains) }
                     val validDock = dock.map { it?.takeUnless(removedIds::contains) }
                     val reconciled = reconcileFolders(HomeLayout(validPins, validDock, old.widgetPlacements, old.folders,
-                        old.widgetRestores, old.leadingSlots), removedIds)
+                        old.widgetRestores, old.leadingSlots), removedIds).deduplicated()
                     val reconciledInactive = inactive?.let { other ->
                         reconcileFolders(HomeLayout(other.homeSlots.map { it?.takeUnless(removedIds::contains) },
                             other.dock.map { it?.takeUnless(removedIds::contains) }, other.widgetPlacements, other.folders,
@@ -391,10 +391,6 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     fun moveFolderApp(folderId: String, appId: String, index: Int) =
         commitLayout(com.jake.duolauncher.moveFolderApp(mutable.value.layout, folderId, appId, index))
     fun folder(id: String) = mutable.value.layout.folder(id)
-    fun setFolderPair(folderId: String, pair: Boolean): Boolean {
-        val layout = mutable.value.layout
-        return commitLayout(layout.copy(folders = layout.folders.map { if (it.id == folderId) it.copy(pair = pair) else it }))
-    }
 
     fun applyImportedLayout(preview: LayoutImportPreview): Boolean {
         if (statePayloadInvalid) return false
@@ -422,8 +418,9 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     fun placement(slot: Int) = mutable.value.layout.placement(slot)
     fun nextWidgetSlot() = (mutable.value.widgetPlacements.maxOfOrNull { it.slot } ?: -1) + 1
     fun removePlacement(source: DropTarget) = commitLayout(removePlacement(mutable.value.layout, source))
-    private fun commitLayout(next: HomeLayout): Boolean {
+    private fun commitLayout(proposed: HomeLayout): Boolean {
         if (statePayloadInvalid) return false
+        val next = proposed.deduplicated()
         val old = mutable.value
         if (old.layout == next) return false
         undoLayout = old.layout to next
@@ -472,7 +469,9 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         val old = mutable.value
         if (old.surfaceExpanded == expanded) return
         val current = old.surface
-        val next = old.inactive ?: current
+        val stored = old.inactive ?: current
+        val next = HomeLayout(stored.homeSlots, old.dock, stored.widgetPlacements, stored.folders, stored.widgetRestores,
+            stored.leadingSlots).deduplicated().toSurface()
         // The dock is shared by both screens; only Home pages, folders and widgets differ.
         // An app now in the dock leaves the incoming screen's Home so it never shows twice.
         val docked = old.dock.filterNotNull().toSet()
@@ -546,7 +545,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                 .put("slot", w.slot).put("id", w.id).put("page", w.page).put("column", w.column).put("row", w.row)
                 .put("spanX", w.spanX).put("spanY", w.spanY)) } }
             val folders = JSONArray().also { array -> layout.folders.forEach { folder -> array.put(JSONObject()
-                .put("id", folder.id).put("title", folder.title).put("apps", JSONArray(folder.appIds)).put("pair", folder.pair)) } }
+                .put("id", folder.id).put("title", folder.title).put("apps", JSONArray(folder.appIds))) } }
             val restores = JSONArray().also { array -> layout.widgetRestores.forEach { restore -> array.put(JSONObject()
                 .put("slot", restore.slot).put("provider", restore.providerComponent).put("userSerial", restore.userSerial)
                 .put("title", restore.title).put("profileLabel", restore.profileLabel).put("work", restore.isWork)
@@ -645,7 +644,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                 List(array.length()) { index ->
                     val item = array.getJSONObject(index)
                     val apps = item.getJSONArray("apps")
-                    FolderEntry(item.getString("id"), item.getString("title"), List(apps.length()) { apps.getString(it) }, item.optBoolean("pair", false))
+                    FolderEntry(item.getString("id"), item.getString("title"), List(apps.length()) { apps.getString(it) })
                 }.also { loaded ->
                     require(loaded.map(FolderEntry::id).distinct().size == loaded.size)
                     require(loaded.flatMap(FolderEntry::appIds).distinct().size == loaded.sumOf { it.appIds.size })

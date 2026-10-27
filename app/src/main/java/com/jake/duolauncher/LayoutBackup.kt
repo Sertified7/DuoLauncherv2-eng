@@ -46,7 +46,7 @@ fun encodeLayoutBackup(state: LauncherState, widgetDescriptors: List<BackupWidge
         .put("id", app.id).put("label", app.label).put("component", app.component.flattenToString())
         .put("userSerial", app.userSerial).put("profileLabel", app.profileLabel).put("work", app.isWork)) } }
     val folders = JSONArray().also { array -> state.folders.forEach { folder -> array.put(JSONObject()
-        .put("id", folder.id).put("title", folder.title).put("apps", JSONArray(folder.appIds)).put("pair", folder.pair)) } }
+        .put("id", folder.id).put("title", folder.title).put("apps", JSONArray(folder.appIds))) } }
     val widgets = JSONArray().also { array -> state.widgetPlacements.forEach { placement ->
         val saved = state.widgetRestores.firstOrNull { it.slot == placement.slot }
         val descriptor = descriptorBySlot[placement.slot]
@@ -112,7 +112,7 @@ fun decodeLayoutBackup(raw: String, currentApps: List<AppEntry>, currentProfiles
     val importedFolders = List(folderArray.length()) { index ->
         val item = folderArray.getJSONObject(index)
         val children = item.getJSONArray("apps")
-        FolderEntry(item.getString("id"), item.getString("title"), List(children.length()) { children.getString(it) }, item.optBoolean("pair", false))
+        FolderEntry(item.getString("id"), item.getString("title"), List(children.length()) { children.getString(it) })
     }
     require(importedFolders.map(FolderEntry::id).distinct().size == importedFolders.size)
     require(importedFolders.flatMap(FolderEntry::appIds).distinct().size == importedFolders.sumOf { it.appIds.size })
