@@ -135,7 +135,6 @@ fun LauncherScreen(
     showFirstRun: Boolean = false,
     onFinishFirstRun: () -> Unit = {},
     onShadeSetup: () -> Unit = {},
-    playFoldAnimation: Boolean = false,
 ) {
     var sheet by rememberSaveable { mutableStateOf("") }
     var dockSlot by rememberSaveable { mutableIntStateOf(0) }
@@ -413,32 +412,7 @@ fun LauncherScreen(
     // Like iOS: starting to drag an icon puts Home into editing mode.
     LaunchedEffect(drag.active, drag.moved) { if (drag.active && drag.moved) editingHome = true }
     BackHandler(enabled = editingHome && sheet.isEmpty() && !drag.active) { editingHome = false; editAnchor = null }
-    // Fold/unfold entrance. Detected from the layout switching screens (works whether or not One UI
-    // recreates the activity) and started only once the window is really visible, because the Fold turns
-    // the other display on with a delay that used to hide the whole animation.
-    var lastSurface by rememberSaveable { mutableStateOf<Boolean?>(null) }
-    val switchedScreen = playFoldAnimation || (lastSurface != null && lastSurface != state.surfaceExpanded)
-    val foldReveal = remember { androidx.compose.animation.core.Animatable(if (switchedScreen) 0f else 1f) }
-    val rootView = androidx.compose.ui.platform.LocalView.current
-    LaunchedEffect(state.surfaceExpanded) {
-        val changed = playFoldAnimation && lastSurface == null || (lastSurface != null && lastSurface != state.surfaceExpanded)
-        lastSurface = state.surfaceExpanded
-        if (!changed && foldReveal.value >= 1f) return@LaunchedEffect
-        foldReveal.snapTo(0f)
-        // Unfolding: follow the real hinge angle so the left page opens with the phone, like the iPhone Duo.
-        if (state.surfaceExpanded && followHingeAngle(rootView.context) { foldReveal.snapTo(it) }) {
-            foldReveal.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = .7f, stiffness = 260f))
-            return@LaunchedEffect
-        }
-        val waitStart = android.os.SystemClock.uptimeMillis()
-        while (!(rootView.isShown && rootView.hasWindowFocus()) && android.os.SystemClock.uptimeMillis() - waitStart < 2_000L) {
-            kotlinx.coroutines.delay(16)
-        }
-        kotlinx.coroutines.delay(120)
-        foldReveal.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = .78f, stiffness = 90f))
-    }
-    val foldProgress: () -> Float = { foldReveal.value }
-    CompositionLocalProvider(LocalHomeEditMode provides editMode, LocalFoldReveal provides foldProgress) {
+    CompositionLocalProvider(LocalHomeEditMode provides editMode) {
     Box(Modifier.fillMaxSize().graphicsLayer {
         // The feed frame reuses the pager's render nodes in another window. Give Main
         // a complete render target so cross-window damage cannot erase stationary controls.
@@ -609,18 +583,6 @@ fun LauncherScreen(
                     }
                 }
             }
-            // Unfold "page" shading: the left half starts dark at the hinge and lights up as the page opens,
-            // so the book-like unfold is visible even when the left page has no icons.
-            if (geometry.expanded) Box(Modifier.align(Alignment.CenterStart).fillMaxHeight().width(this@BoxWithConstraints.maxWidth / 2)
-                .graphicsLayer {
-                    val p = foldProgress().coerceIn(0f, 1f)
-                    alpha = (1f - p)
-                    // The lit area grows outward from the hinge as the left page opens.
-                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, .5f)
-                    scaleX = (1f - p * .999f).coerceAtLeast(.001f)
-                }
-                .background(androidx.compose.ui.graphics.Brush.horizontalGradient(
-                    listOf(Color.Black.copy(alpha = .55f), Color.Black.copy(alpha = .92f)))))
             if (state.verticalStatus) StatusRail(deviceStatus,
                 Modifier.align(Alignment.TopEnd).padding(end = 12.dp).offset(y = geometry.contentTop.dp)
                     .width(preset.dockWidth.dp).onSizeChanged {
@@ -1291,7 +1253,6 @@ private fun ExpandedWorkspace(
     onEmptyWidget: (Int) -> Unit,
     onRefresh: () -> Unit,
 ) {
-    val foldProgress = LocalFoldReveal.current
     val density = LocalDensity.current
     val viewportWidth = motion.pageWidth
     val stride = motion.homeStride
@@ -1354,7 +1315,7 @@ private fun ExpandedWorkspace(
         if (showLeading) {
             key("expanded-leading-home") {
                 Box(Modifier.place(leadingX).width((geometry.gridWidth + 16f).dp).fillMaxHeight()
-                    .foldDoor().testTag("expanded-leading-home")) {
+                    .testTag("expanded-leading-home")) {
                     HomePagePane(
                         -1, state, previewSlots, previewLeadingSlots, previewWidgetPlacements, appsById, geometry, contentHeight, bottomSpace,
                         widgets, drag, target, insertionTarget, showLargeWidget = true,
@@ -1370,13 +1331,6 @@ private fun ExpandedWorkspace(
             key("expanded-home-$page") {
                 stateHolder.SaveableStateProvider("expanded-home-$page") {
                     Box(Modifier.place(initialHomeOrigin + page * stride)
-                        .graphicsLayer {
-                            // The right page settles flat against the hinge as the phone opens.
-                            val p = foldProgress().coerceIn(0f, 1f)
-                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, .5f)
-                            cameraDistance = 14f * this.density
-                            rotationY = (1f - p) * 18f
-                        }
                         .width((geometry.gridWidth + 16f).dp).fillMaxHeight()) {
                         HomePagePane(
                             page, state, previewSlots, previewLeadingSlots, previewWidgetPlacements, appsById, geometry, contentHeight, bottomSpace,
@@ -1592,7 +1546,7 @@ private fun SharedHomeGrid(
                     if (dimDragged && id == draggedId) .28f else 1f,
                     label = "home insertion visibility $id",
                 )
-                Box(Modifier.offset { animatedOffset }.foldReveal(localIndex % GRID_COLUMNS + row, !geometry.expanded).width(cellWidth).height(rowHeight.dp)
+                Box(Modifier.offset { animatedOffset }.width(cellWidth).height(rowHeight.dp)
                     .alpha(opacity).testTag("home-app-$id"), contentAlignment = Alignment.TopCenter) {
                     if (visible) AppTile(app, iconSize, labels,
                         onClick = { if (!editMode.active) onLaunch(app, it) }, onLongClick = { onActions(app) },
@@ -1611,7 +1565,7 @@ private fun SharedHomeGrid(
             val x = cellWidth * (localIndex % GRID_COLUMNS)
             val y = rowTop(row).dp
             FolderTile(folder, appsById, iconSize, labels, drag, page,
-                Modifier.offset(x = x, y = y).foldReveal(localIndex % GRID_COLUMNS + row, !geometry.expanded).width(cellWidth).height(rowHeight.dp)
+                Modifier.offset(x = x, y = y).width(cellWidth).height(rowHeight.dp)
                     .testTag("home-folder-${folder.id}"), onClick = { onFolder(folder.id) })
         }
         pageWidgets.forEach { placement ->
@@ -1711,7 +1665,7 @@ private fun DockAppColumn(
                     if (!visible) 0f else if (dimDragged && id == draggedId) .28f else 1f,
                     label = "dock insertion visibility $id",
                 )
-                Box(Modifier.offset { animatedOffset }.foldReveal(renderIndex + 2, true).fillMaxWidth().height(rowHeight.dp).alpha(opacity)
+                Box(Modifier.offset { animatedOffset }.fillMaxWidth().height(rowHeight.dp).alpha(opacity)
                     .testTag("dock-app-$id"), contentAlignment = Alignment.Center) {
                     Box(Modifier.homeJiggle(id)) {
                         Image(app.icon.asImageBitmap(), null, Modifier.size(iconSize.dp).testTag("dock-icon-$id")
