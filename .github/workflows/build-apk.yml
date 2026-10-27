@@ -30,7 +30,19 @@ jobs:
           DUO_RELEASE_STORE_PASSWORD: android
           DUO_RELEASE_KEY_ALIAS: androiddebugkey
           DUO_RELEASE_KEY_PASSWORD: android
-        run: ./gradlew --no-daemon :app:assembleRelease
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon :app:assembleRelease 2>&1 | tee build.log
+      - name: Report build errors
+        if: failure()
+        run: |
+          grep -E "^e: |error:|Error:|What went wrong|FAILURE|Lint found|lint" -A3 build.log | head -60 | while IFS= read -r line; do
+            [ -n "$line" ] && echo "::error::${line}"
+          done
+          for f in app/build/intermediates/lint_intermediate_text_report/*/*/lint-results*.txt app/build/reports/lint-results*.txt; do
+            [ -f "$f" ] && head -40 "$f" | while IFS= read -r line; do [ -n "$line" ] && echo "::error::${line}"; done
+          done
+          true
       - name: Rename APK
         run: cp app/build/outputs/apk/release/app-release.apk "DuoLauncher-Fold8-${{ github.run_number }}.apk"
       - uses: actions/upload-artifact@v4
