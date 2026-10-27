@@ -39,7 +39,7 @@ class AppearanceStore(private val context: Context) {
             locationTime = System.currentTimeMillis(), deviceLocation = false), systemDark)
     }
     fun setDeviceLocation(latitude: Double, longitude: Double, systemDark: Boolean) = save(state.copy(
-        place = "Approximate device location", latitude = latitude, longitude = longitude,
+        place = "Position approximative de l’appareil", latitude = latitude, longitude = longitude,
         locationTime = System.currentTimeMillis(), deviceLocation = true, locationStatus = null), systemDark)
     fun locationStatus(message: String?) { state = state.copy(locationStatus = message) }
     fun clearLocation(systemDark: Boolean) = save(state.copy(place = "", latitude = null, longitude = null,
@@ -63,11 +63,11 @@ class AppearanceStore(private val context: Context) {
         AppearanceMode.SYSTEM -> value.copy(dark = systemDark, fallback = null)
         AppearanceMode.SUNRISE_SUNSET -> {
             val lat = value.latitude; val lon = value.longitude
-            if (lat == null || lon == null) value.copy(dark = systemDark, fallback = "Using system theme until a location is set")
+            if (lat == null || lon == null) value.copy(dark = systemDark, fallback = "Thème système utilisé jusqu’à ce qu’une position soit définie")
             else if (value.deviceLocation && System.currentTimeMillis() - value.locationTime > 30L * 24 * 60 * 60 * 1000)
-                value.copy(dark = systemDark, fallback = "Using system theme because the device location is stale")
+                value.copy(dark = systemDark, fallback = "Thème système utilisé : la position de l’appareil est trop ancienne")
             else runCatching { val now = ZonedDateTime.now(); value.copy(dark = solarSchedule(now.toLocalDate(), lat, lon, now.zone).isDark(now), fallback = null) }
-                .getOrElse { value.copy(dark = systemDark, fallback = "Using system theme because this location is unavailable") }
+                .getOrElse { value.copy(dark = systemDark, fallback = "Thème système utilisé : cette position est indisponible") }
         }
     }
 }

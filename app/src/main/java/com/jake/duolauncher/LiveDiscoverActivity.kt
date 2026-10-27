@@ -61,7 +61,7 @@ internal class DiscoverHostStartGate(private var nextToken: Long = System.nanoTi
 internal object LiveDiscover {
     var host = WeakReference<LiveDiscoverActivity>(null)
     var owner = WeakReference<MainActivity>(null)
-    val message = mutableStateOf<String?>("Connecting to Discover…")
+    val message = mutableStateOf<String?>("Connexion à Discover…")
     var onNativeProgress: ((Float) -> Unit)? = null
     var onHomeRequest: (() -> Unit)? = null
     var fullSize = androidx.compose.ui.geometry.Size.Zero
@@ -90,7 +90,7 @@ internal object LiveDiscover {
         owner = WeakReference(activity)
         if (host.get() != null) return
         val token = startGate.request(activity) ?: return
-        message.value = "Connecting to Discover…"
+        message.value = "Connexion à Discover…"
         val options = ActivityOptions.makeCustomAnimation(activity, 0, 0).toBundle().apply {
             DiscoverBounds.launchOptions(suppressOverlayAnimation = true)?.let(::putAll)
         }
@@ -120,7 +120,7 @@ internal object LiveDiscover {
                 if (activity.isFinishing || activity.isDestroyed ||
                     !activity.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED))
                     startGate.reset(activity)
-                else message.value = "Discover couldn't start. Tap Retry to reconnect."
+                else message.value = "Discover n’a pas pu démarrer. Touchez Réessayer pour vous reconnecter."
             }
         }
     }
@@ -254,7 +254,7 @@ class LiveDiscoverActivity : ComponentActivity() {
                 client.connect()
                 client.page(LiveDiscover.nativeProgress(LiveDiscover.progress), LiveDiscover.pagerOwnsMotion)
             } else if (remaining > 0) decor.postOnAnimation { attach(remaining - 1) }
-            else LiveDiscover.message.value = "Discover couldn't fit beside the dock."
+            else LiveDiscover.message.value = "Discover ne tient pas à côté du dock."
         }
         window.decorView.postOnAnimation { attach(30) }
     }

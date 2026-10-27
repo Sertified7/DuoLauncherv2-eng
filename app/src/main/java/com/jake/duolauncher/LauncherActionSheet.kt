@@ -58,31 +58,31 @@ internal fun LauncherAppActionSheet(app: AppEntry, placed: Boolean, homePages: I
     Column(Modifier.fillMaxWidth().heightIn(max = maxHeight).verticalScroll(rememberScrollState())
         .padding(horizontal = 20.dp).padding(bottom = 20.dp)) {
         Row(Modifier.fillMaxWidth().heightIn(min = 64.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (moving) IconButton(onClick = { onMoving(false) }) { Icon(Icons.Rounded.ArrowBack, "Back") }
+            if (moving) IconButton(onClick = { onMoving(false) }) { Icon(Icons.Rounded.ArrowBack, "Retour") }
             Image(app.icon.asImageBitmap(), null, Modifier.size(48.dp).clip(RoundedCornerShape(13.dp)))
             Spacer(Modifier.width(14.dp)); Column(Modifier.weight(1f)) {
-                Text(if (moving) "Move ${app.label}" else app.label, style = MaterialTheme.typography.titleLarge)
-                Text("${app.profileLabel} profile", style = MaterialTheme.typography.bodySmall,
+                Text(if (moving) "Déplacer ${app.label}" else app.label, style = MaterialTheme.typography.titleLarge)
+                Text("Profil ${profileName(app.profileLabel)}", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            IconButton(onClick = onClose) { Icon(Icons.Rounded.Close, "Close app options") }
+            IconButton(onClick = onClose) { Icon(Icons.Rounded.Close, "Fermer les options de l’appli") }
         }
         if (moving) {
-            ActionRow(Icons.Rounded.ArrowUpward, "Move to first position", onMoveFirst)
-            ActionRow(Icons.Rounded.KeyboardArrowUp, "Move earlier", onMoveEarlier)
-            ActionRow(Icons.Rounded.KeyboardArrowDown, "Move later", onMoveLater)
+            ActionRow(Icons.Rounded.ArrowUpward, "Déplacer en première position", onMoveFirst)
+            ActionRow(Icons.Rounded.KeyboardArrowUp, "Déplacer avant", onMoveEarlier)
+            ActionRow(Icons.Rounded.KeyboardArrowDown, "Déplacer après", onMoveLater)
             HorizontalDivider(Modifier.padding(vertical = 6.dp))
-            repeat(homePages) { page -> ActionRow(Icons.Rounded.GridView, "Move to page ${page + 1}",
+            repeat(homePages) { page -> ActionRow(Icons.Rounded.GridView, "Déplacer vers la page ${page + 1}",
                 { onMovePage(page) }, Modifier.testTag("app-move-${app.id}-page-$page")) }
         } else {
-            if (placed) ActionRow(Icons.Rounded.DragIndicator, "Move on Home", { onMoving(true) })
-            else ActionRow(Icons.Rounded.Home, "Add to Home", onAddOrRemove)
+            if (placed) ActionRow(Icons.Rounded.DragIndicator, "Déplacer sur l’accueil", { onMoving(true) })
+            else ActionRow(Icons.Rounded.Home, "Ajouter à l’accueil", onAddOrRemove)
             onWidgets?.let { ActionRow(Icons.Rounded.Widgets, "Widgets", it) }
-            ActionRow(Icons.Rounded.CreateNewFolder, "Create folder", onCreateFolder)
-            ActionRow(Icons.Rounded.Info, "App info", onInfo)
+            ActionRow(Icons.Rounded.CreateNewFolder, "Créer un dossier", onCreateFolder)
+            ActionRow(Icons.Rounded.Info, "Infos sur l’appli", onInfo)
             if (placed) {
                 Spacer(Modifier.height(10.dp)); HorizontalDivider(); Spacer(Modifier.height(4.dp))
-                ActionRow(Icons.Rounded.RemoveCircleOutline, "Remove from Home", onAddOrRemove,
+                ActionRow(Icons.Rounded.RemoveCircleOutline, "Retirer de l’accueil", onAddOrRemove,
                     tint = MaterialTheme.colorScheme.error)
             }
         }
@@ -96,14 +96,14 @@ internal fun EmptySpaceActionSheet(onWidgets: () -> Unit, onWallpaper: () -> Uni
     Column(Modifier.fillMaxWidth().heightIn(max = maxHeight).verticalScroll(rememberScrollState())
         .padding(horizontal = 20.dp).padding(bottom = 20.dp)) {
         Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Add to Home", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-            IconButton(onClick = onClose) { Icon(Icons.Rounded.Close, "Close empty space options") }
+            Text("Ajouter à l’accueil", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+            IconButton(onClick = onClose) { Icon(Icons.Rounded.Close, "Fermer les options de l’espace vide") }
         }
-        Text("Choose what belongs in this space.", style = MaterialTheme.typography.bodyMedium,
+        Text("Choisissez ce qui va dans cet espace.", style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
         ActionRow(Icons.Rounded.Widgets, "Widgets", onWidgets, Modifier.testTag("empty-space-widgets"))
-        ActionRow(Icons.Rounded.Wallpaper, "Wallpaper", onWallpaper, Modifier.testTag("empty-space-wallpaper"))
-        ActionRow(Icons.Rounded.Tune, "Customize launcher", onCustomize, Modifier.testTag("empty-space-customize"))
+        ActionRow(Icons.Rounded.Wallpaper, "Fond d’écran", onWallpaper, Modifier.testTag("empty-space-wallpaper"))
+        ActionRow(Icons.Rounded.Tune, "Personnaliser le lanceur", onCustomize, Modifier.testTag("empty-space-customize"))
     }
 }
 

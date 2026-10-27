@@ -56,7 +56,7 @@ class MainActivity : ComponentActivity() {
         if (appearancePermissionGeneration != appearanceLocationGeneration || isDestroyed) return@permissionResult
         appearancePermissionGeneration = -1
         if (granted) requestAppearanceLocation(keepPending = true)
-        else finishAppearanceLocation("Location permission wasn’t granted. Using the system theme until you set a place.")
+        else finishAppearanceLocation("L’autorisation de position n’a pas été accordée. Utilisation du thème système jusqu’à ce que vous définissiez un lieu.")
     })
     private var openingDiscover = false
     private var shadeSetupDialog: android.app.AlertDialog? = null
@@ -87,6 +87,8 @@ class MainActivity : ComponentActivity() {
         updateDefaultHome()
         if (savedInstanceState == null && intent.getStringExtra("duo_destination") == "search") searchRequests.intValue++
         intent.removeExtra("duo_destination")
+        // Pick the inner- or cover-screen layout before the first frame so the wrong one never flashes.
+        model.setSurface(resources.configuration.screenWidthDp >= 650)
         setContent {
             val state = model.state.collectAsStateWithLifecycle().value
             val deviceStatus = status.state.collectAsStateWithLifecycle().value
@@ -157,9 +159,9 @@ class MainActivity : ComponentActivity() {
             ShadeOpenResult.OPENED -> Unit
             ShadeOpenResult.SERVICE_DISABLED -> showShadeSetup()
             ShadeOpenResult.SERVICE_STARTING -> Toast.makeText(this,
-                "Shade gestures are starting. Swipe down again.", Toast.LENGTH_SHORT).show()
+                "Les gestes du volet démarrent. Balayez à nouveau vers le bas.", Toast.LENGTH_SHORT).show()
             ShadeOpenResult.ACTION_REJECTED -> Toast.makeText(this,
-                "Android couldn’t open the system panel.", Toast.LENGTH_SHORT).show()
+                "Android n’a pas pu ouvrir le panneau système.", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -167,17 +169,17 @@ class MainActivity : ComponentActivity() {
         if (shadeSetupDialog?.isShowing == true) return
         ownShadeSetupExternally()
         shadeSetupDialog = android.app.AlertDialog.Builder(this)
-            .setTitle("Turn on shade gestures")
-            .setMessage("Android requires you to enable Duo Launcher shade gestures in Accessibility settings. This service only opens Notifications or Quick Settings; it doesn’t read screen content or watch other apps.")
-            .setNegativeButton("Not now", null)
-            .setPositiveButton("Open settings") { _, _ ->
+            .setTitle("Activer les gestes du volet")
+            .setMessage("Android exige d’activer les gestes du volet Duo Launcher dans les paramètres d’accessibilité. Ce service ouvre seulement les notifications ou les réglages rapides ; il ne lit pas le contenu de l’écran et ne surveille pas les autres applis.")
+            .setNegativeButton("Plus tard", null)
+            .setPositiveButton("Ouvrir les paramètres") { _, _ ->
                 try {
                     returningFromShadeSettings = true
                     startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                 } catch (_: android.content.ActivityNotFoundException) {
                     returningFromShadeSettings = false
                     releaseShadeSetupOwnership()
-                    Toast.makeText(this, "Accessibility settings are unavailable.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, "Les paramètres d’accessibilité sont indisponibles.", Toast.LENGTH_LONG).show()
                 }
             }
             .also { dialog -> dialog.setOnDismissListener {
@@ -230,9 +232,9 @@ class MainActivity : ComponentActivity() {
     private fun launchApp(app: AppEntry, bounds: android.graphics.Rect? = null) {
         try {
             val user = getSystemService(UserManager::class.java).getUserForSerialNumber(app.userSerial)
-                ?: throw IllegalStateException("Profile is unavailable")
+                ?: throw IllegalStateException("Profil indisponible")
             getSystemService(LauncherApps::class.java).startMainActivity(app.component, user, screenBounds(bounds), launchOptions(bounds))
-        } catch (_: Exception) { Toast.makeText(this, "${app.label} is unavailable.", Toast.LENGTH_SHORT).show(); model.refresh() }
+        } catch (_: Exception) { Toast.makeText(this, "${app.label} est indisponible.", Toast.LENGTH_SHORT).show(); model.refresh() }
     }
 
     private fun screenBounds(bounds: android.graphics.Rect?): android.graphics.Rect? = bounds?.takeUnless { it.isEmpty }?.let {
@@ -248,32 +250,26 @@ class MainActivity : ComponentActivity() {
     } catch (_: android.content.ActivityNotFoundException) { false }
       catch (_: SecurityException) { false }
 
+    /**
+     * Swiping right from the first Home page opens the Google app, whose home tab is the Discover feed.
+     * Google only serves the embedded feed to a few approved launchers, so this is the reliable path.
+     */
     private fun openDiscover() {
-        if (DiscoverEmbedding.supported(this)) {
-            if (openingDiscover) return
-            openingDiscover = true
-            // A very quick reopen can arrive before the previous return's deferred cleanup.
-            // Finish that session before taking a new image, so it cannot invalidate this copy.
-            DiscoverSession.dismiss()
-            DiscoverMotion.capture(this) {
-                openingDiscover = false
-                if (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) return@capture
-                DiscoverSession.apps = model.state.value.apps
-                startActivity(Intent(this, DiscoverActivity::class.java)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS or Intent.FLAG_ACTIVITY_NO_ANIMATION))
-            }
-        }
-        else showDiscoverFallback()
+        val google = packageManager.getLaunchIntentForPackage(DiscoverClient.GOOGLE_PACKAGE)
+        if (google == null) { showDiscoverFallback(); return }
+        val options = android.app.ActivityOptions.makeCustomAnimation(this,
+            android.R.anim.slide_in_left, android.R.anim.fade_out)
+        runCatching { startActivity(google, options.toBundle()) }.onFailure { showDiscoverFallback() }
     }
 
     private fun showDiscoverFallback() {
         val google = packageManager.getLaunchIntentForPackage(DiscoverClient.GOOGLE_PACKAGE)
         android.app.AlertDialog.Builder(this)
-            .setTitle("Discover isn’t available here")
-            .setMessage("Duo can’t place the Discover feed beside Home on this device. You can open the Google app or stay on Home.")
-            .setNegativeButton("Stay on Home", null)
+            .setTitle("Discover n’est pas disponible")
+            .setMessage("Installez ou activez l’appli Google pour afficher Discover.")
+            .setNegativeButton("Rester sur l’accueil", null)
             .apply {
-                if (google != null) setPositiveButton("Open Google") { _, _ ->
+                if (google != null) setPositiveButton("Ouvrir Google") { _, _ ->
                     runCatching { startActivity(google) }
                 }
             }
@@ -299,14 +295,14 @@ class MainActivity : ComponentActivity() {
 
     private fun useAppearanceLocation() {
         cancelAppearanceLocation()
-        appearance.locationStatus("Waiting for approximate device location…")
+        appearance.locationStatus("En attente de la position approximative…")
         LiveDiscover.setExternalResultPending(this, "main", "appearance-location", true)
         if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED)
             requestAppearanceLocation(keepPending = true)
         else {
             appearancePermissionGeneration = appearanceLocationGeneration
             runCatching { locationPermission.launch(android.Manifest.permission.ACCESS_COARSE_LOCATION) }
-                .onFailure { finishAppearanceLocation("Location permission couldn’t be requested. Using the system theme.") }
+                .onFailure { finishAppearanceLocation("Impossible de demander l’autorisation de position. Utilisation du thème système.") }
         }
     }
 
@@ -315,7 +311,7 @@ class MainActivity : ComponentActivity() {
         val generation = ++appearanceLocationGeneration
         val manager = getSystemService(LocationManager::class.java)
         if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            finishAppearanceLocation("Location permission isn’t available. Using the system theme."); return
+            finishAppearanceLocation("L’autorisation de position n’est pas disponible. Utilisation du thème système."); return
         }
         val cached = runCatching { manager.getProviders(true).mapNotNull { manager.getLastKnownLocation(it) }
             .maxByOrNull { it.time }?.takeIf { System.currentTimeMillis() - it.time <= 15 * 60_000 } }.getOrNull()
@@ -327,19 +323,19 @@ class MainActivity : ComponentActivity() {
             manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
             manager.isProviderEnabled(LocationManager.PASSIVE_PROVIDER) -> LocationManager.PASSIVE_PROVIDER
             else -> null
-        } }.getOrNull() ?: run { finishAppearanceLocation("No approximate location provider is available. Using the system theme."); return }
+        } }.getOrNull() ?: run { finishAppearanceLocation("Aucun fournisseur de position approximative disponible. Utilisation du thème système."); return }
         val cancellation = CancellationSignal()
         appearanceLocationCancellation = cancellation
         window.decorView.postDelayed({
             if (generation == appearanceLocationGeneration && appearanceLocationCancellation === cancellation) {
-                cancellation.cancel(); finishAppearanceLocation("Location timed out. Using the system theme until you try again or enter a place.")
+                cancellation.cancel(); finishAppearanceLocation("La position a mis trop de temps. Utilisation du thème système jusqu’à une nouvelle tentative ou la saisie d’un lieu.")
             }
         }, 10_000)
         runCatching { manager.getCurrentLocation(provider, cancellation, ContextCompat.getMainExecutor(this)) { location ->
             if (generation != appearanceLocationGeneration || isDestroyed) return@getCurrentLocation
             if (location != null) appearance.setDeviceLocation(location.latitude, location.longitude, systemDark())
-            finishAppearanceLocation(if (location == null) "Location is unavailable. Using the system theme." else null)
-        } }.onFailure { finishAppearanceLocation("Location is unavailable. Using the system theme.") }
+            finishAppearanceLocation(if (location == null) "Position indisponible. Utilisation du thème système." else null)
+        } }.onFailure { finishAppearanceLocation("Position indisponible. Utilisation du thème système.") }
     }
 
     private fun cancelAppearanceLocation() {
@@ -370,17 +366,17 @@ class MainActivity : ComponentActivity() {
             startActivity(Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER)
                 .putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT, ComponentName(this, DuneWallpaperService::class.java)))
         } catch (_: android.content.ActivityNotFoundException) {
-            Toast.makeText(this, "The system wallpaper preview is unavailable.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "L’aperçu du fond d’écran système est indisponible.", Toast.LENGTH_LONG).show()
         }
     }
 
     private fun appInfo(app: AppEntry) {
         try {
             val user = getSystemService(UserManager::class.java).getUserForSerialNumber(app.userSerial)
-                ?: throw IllegalStateException("Profile is unavailable")
+                ?: throw IllegalStateException("Profil indisponible")
             getSystemService(LauncherApps::class.java).startAppDetailsActivity(app.component, user, null, null)
         } catch (_: Exception) {
-            Toast.makeText(this, "${app.label} is unavailable.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "${app.label} est indisponible.", Toast.LENGTH_SHORT).show()
             model.refresh()
         }
     }

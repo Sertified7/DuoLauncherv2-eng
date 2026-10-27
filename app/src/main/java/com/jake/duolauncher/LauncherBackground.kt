@@ -125,7 +125,7 @@ class LauncherBackgroundController(
             loading = true
             onExternalResultChanged(false)
             if (pendingUri != null && operation != null) decode(Uri.parse(pendingUri), operation)
-            else failPreviewRestore("The pending photo selection could not be restored.")
+            else failPreviewRestore("Impossible de restaurer la sélection de photo en attente.")
         } else if (previewPhase == PHASE_READY) {
             pickerPending = false
             previewPending = true
@@ -134,7 +134,7 @@ class LauncherBackgroundController(
             prefs.edit().remove(PENDING_URI).apply()
             if (operation != null && persistedPreviewFile?.isFile == true) {
                 restorePreview(persistedPreviewFile, operation)
-            } else failPreviewRestore("The pending photo preview could not be restored.")
+            } else failPreviewRestore("Impossible de restaurer l’aperçu de la photo en attente.")
         } else if (pickerPending) {
             onExternalResultChanged(true)
         } else onExternalResultChanged(false)
@@ -156,7 +156,7 @@ class LauncherBackgroundController(
         onExternalResultChanged(true)
         try { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
         catch (error: Exception) {
-            errorMessage = error.message ?: "The photo picker is unavailable."
+            errorMessage = error.message ?: "Le sélecteur de photos est indisponible."
             clearPickerPending()
         }
     }
@@ -170,7 +170,7 @@ class LauncherBackgroundController(
         launcherBackgroundFile(activity).delete()
         prefs.edit().putBoolean(BACKGROUND_ENABLED, false).remove(BACKGROUND_ID).remove(PICKER_PENDING).remove(PENDING_URI)
             .remove(PENDING_OPERATION).remove(PREVIEW_PHASE).remove(PREVIEW_FILE).apply()
-        photoSelected = false; errorMessage = null; successMessage = "Using Duo dunes."
+        photoSelected = false; errorMessage = null; successMessage = "Dunes Duo utilisées."
         onExternalResultChanged(false)
         cleanupStagedFiles()
     }
@@ -198,10 +198,10 @@ class LauncherBackgroundController(
                 LauncherBackgroundCache.changed(staged.bitmap, staged.operation)
                 photoSelected = true
                 errorMessage = null
-                successMessage = "Launcher background updated."
+                successMessage = "Arrière-plan du lanceur mis à jour."
                 cleanupStagedFiles()
             }
-            .onFailure { errorMessage = it.message ?: "That photo could not be saved." }
+            .onFailure { errorMessage = it.message ?: "Impossible d’enregistrer cette photo." }
     }
 
     fun cancelPreview() {
@@ -225,7 +225,7 @@ class LauncherBackgroundController(
 
     private fun beginPreview(uri: Uri, operation: String?) {
         if (operation == null) {
-            errorMessage = "The pending photo selection could not be restored."
+            errorMessage = "Impossible de restaurer la sélection de photo en attente."
             clearPickerPending()
             return
         }
@@ -251,7 +251,7 @@ class LauncherBackgroundController(
     }
 
     private fun decode(uri: Uri, operation: String?) {
-        if (operation == null) { failPreviewRestore("The pending photo selection could not be restored."); return }
+        if (operation == null) { failPreviewRestore("Impossible de restaurer la sélection de photo en attente."); return }
         val token = generation
         activity.lifecycleScope.launch {
             // withContext has prompt cancellation: its IO block can finish creating the file
@@ -277,14 +277,14 @@ class LauncherBackgroundController(
                 return@launch
             }
             val staged = result.getOrElse {
-                failPreviewRestore(it.message ?: "That photo could not be used.")
+                failPreviewRestore(it.message ?: "Impossible d’utiliser cette photo.")
                 return@launch
             }
             val persisted = prefs.edit().putString(PREVIEW_PHASE, PHASE_READY)
                 .putString(PREVIEW_FILE, staged.file.name).remove(PENDING_URI).commit()
             if (!persisted || token != generation || !previewPending || pendingOperation() != operation) {
                 staged.discard()
-                if (!persisted) failPreviewRestore("That photo preview could not be saved.")
+                if (!persisted) failPreviewRestore("Impossible d’enregistrer l’aperçu de cette photo.")
                 return@launch
             }
             releasePreviewGrant(operation)
@@ -318,7 +318,7 @@ class LauncherBackgroundController(
             }
             if (bitmap == null) {
                 file.delete()
-                failPreviewRestore("The pending photo preview could not be restored.")
+                failPreviewRestore("Impossible de restaurer l’aperçu de la photo en attente.")
                 return@launch
             }
             val staged = StagedBackground(bitmap, file, operation)
@@ -401,7 +401,7 @@ class LauncherBackgroundController(
         val source = ImageDecoder.createSource(activity.contentResolver, uri)
         val bitmap = ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
             val width = info.size.width; val height = info.size.height
-            require(width > 0 && height > 0) { "The selected image has no usable pixels." }
+            require(width > 0 && height > 0) { "L’image sélectionnée ne contient aucun pixel utilisable." }
             val scale = minOf(1f, MAX_BACKGROUND_EDGE.toFloat() / maxOf(width, height))
             decoder.setTargetSize(maxOf(1, (width * scale).toInt()), maxOf(1, (height * scale).toInt()))
             decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
@@ -409,13 +409,13 @@ class LauncherBackgroundController(
         }
         if (bitmap.byteCount > MAX_BACKGROUND_EDGE * MAX_BACKGROUND_EDGE * 4) {
             bitmap.recycle()
-            throw IllegalArgumentException("The selected image is too large.")
+            throw IllegalArgumentException("L’image sélectionnée est trop grande.")
         }
         val temporary = File(launcherBackgroundFile(activity).parentFile,
             "$BACKGROUND_FILE.$operation.${UUID.randomUUID()}.tmp")
         try {
             FileOutputStream(temporary).use { output ->
-                require(bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)) { "The selected image could not be saved." }
+                require(bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)) { "Impossible d’enregistrer l’image sélectionnée." }
                 output.fd.sync()
             }
         } catch (error: Exception) {

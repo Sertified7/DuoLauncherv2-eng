@@ -48,13 +48,13 @@ fun StatusRail(
     }
     val format = if (android.text.format.DateFormat.is24HourFormat(LocalContext.current)) "HH:mm" else "h:mm"
     val timeFormatter = remember(format) { DateTimeFormatter.ofPattern(format) }
-    val dateFormatter = remember { DateTimeFormatter.ofPattern("MMM d") }
+    val dateFormatter = remember { DateTimeFormatter.ofPattern("d MMM") }
     val description = listOfNotNull(
-        if (locationInUse) "Location in use" else null,
-        now.format(DateTimeFormatter.ofPattern("EEEE, MMMM d, $format")),
-        status.battery?.let { "Battery $it percent${if (status.charging) ", charging" else ""}" } ?: "Battery unavailable",
-        if (status.wifiConnected) "Wi-Fi connected${status.wifiLevel?.let { ", signal $it of 4" } ?: ""}" else "Wi-Fi disconnected",
-        if (status.airplane) "Airplane mode" else status.cellularLevel?.let { "Cellular signal $it of 4" } ?: "Cellular signal unavailable",
+        if (locationInUse) "Position utilisée" else null,
+        now.format(DateTimeFormatter.ofPattern("EEEE d MMMM, $format")),
+        status.battery?.let { "Batterie $it pour cent${if (status.charging) ", en charge" else ""}" } ?: "Batterie indisponible",
+        if (status.wifiConnected) "Wi-Fi connecté${status.wifiLevel?.let { ", signal $it sur 4" } ?: ""}" else "Wi-Fi déconnecté",
+        if (status.airplane) "Mode avion" else status.cellularLevel?.let { "Signal mobile $it sur 4" } ?: "Signal mobile indisponible",
     ).joinToString(". ")
     val fontScale = LocalDensity.current.fontScale
     val labelStyle = TextStyle(shadow = Shadow(Color.Black.copy(alpha = .3f), Offset(0f, 1f), 3f))
@@ -119,7 +119,7 @@ fun StatusRail(
                     drawCircle(Color.White.copy(alpha = if (lit) 1f else .3f), w * .043f, dotCenter)
                 }
             }
-            if (!compact) Text(if (status.airplane) "Airplane" else status.battery?.let { "$it%${if (status.charging) " +" else ""}" } ?: "—",
+            if (!compact) Text(if (status.airplane) "Mode avion" else status.battery?.let { "$it%${if (status.charging) " +" else ""}" } ?: "—",
                 color = Color.White.copy(alpha = .94f), fontSize = detailSize, fontWeight = FontWeight.Medium,
                 maxLines = 1, softWrap = false, overflow = TextOverflow.Clip, style = labelStyle)
         }

@@ -75,17 +75,17 @@ class BackupController(
     fun startExport(fileName: String = "duo-launcher-layout.json") {
         val state = model.state.value
         val raw = runCatching { encodeLayoutBackup(state, widgetDescriptors(state), scope) }.getOrElse {
-            errorMessage = it.message ?: "Layout backup could not be prepared."; return
+            errorMessage = it.message ?: "Impossible de préparer la sauvegarde de la disposition."; return
         }
         begin(OP_EXPORT, raw)
         try { createDocument.launch(fileName) }
-        catch (error: Exception) { errorMessage = error.message ?: "The document picker is unavailable."; clearTransaction(false) }
+        catch (error: Exception) { errorMessage = error.message ?: "Le sélecteur de documents est indisponible."; clearTransaction(false) }
     }
 
     fun startImport() {
         begin(OP_IMPORT)
         try { openDocument.launch(arrayOf("application/json", "text/json", "text/plain")) }
-        catch (error: Exception) { errorMessage = error.message ?: "The document picker is unavailable."; clearTransaction(false) }
+        catch (error: Exception) { errorMessage = error.message ?: "Le sélecteur de documents est indisponible."; clearTransaction(false) }
     }
 
     fun applyImport(): Boolean {
@@ -100,9 +100,9 @@ class BackupController(
             if (token != generation || operation != OP_PREVIEW) return@launch
             result.onSuccess {
                 val changed = model.applyImportedLayout(it)
-                successMessage = if (changed) "Layout restored. Widgets are ready to reconnect." else "This layout is already active."
+                successMessage = if (changed) "Disposition restaurée. Les widgets sont prêts à être reconnectés." else "Cette disposition est déjà active."
                 clearTransaction(clearMessages = false)
-            }.onFailure { errorMessage = it.message ?: "This layout backup is no longer valid." }
+            }.onFailure { errorMessage = it.message ?: "Cette sauvegarde de disposition n’est plus valide." }
         }
         return true
     }
@@ -133,13 +133,13 @@ class BackupController(
                 val raw = store.getString(KEY_EXPORT, null) ?: error("The export snapshot is unavailable")
                 withContext(Dispatchers.IO) {
                     activity.contentResolver.openOutputStream(uri, "wt")?.bufferedWriter()?.use { it.write(raw) }
-                        ?: error("The selected document could not be opened")
+                        ?: error("Impossible d’ouvrir le document sélectionné")
                 }
             }
             result.rethrowCancellation()
             if (token != generation || operation != OP_EXPORT) return@launch
-            result.onSuccess { successMessage = "Layout backup saved." }
-                .onFailure { errorMessage = it.message ?: "Layout backup could not be saved." }
+            result.onSuccess { successMessage = "Sauvegarde de la disposition enregistrée." }
+                .onFailure { errorMessage = it.message ?: "Impossible d’enregistrer la sauvegarde de la disposition." }
             clearTransaction(clearMessages = false)
         }
     }
@@ -155,7 +155,7 @@ class BackupController(
                 parsePreview(it, persist = false)
             }
                 .onFailure {
-                    errorMessage = it.message ?: "Layout backup could not be read."
+                    errorMessage = it.message ?: "Impossible de lire la sauvegarde de la disposition."
                     clearTransaction(clearMessages = false)
                 }
         }
@@ -177,21 +177,21 @@ class BackupController(
                 onExternalResultChanged(true)
             }.onFailure {
                 if (token != generation) return@onFailure
-                errorMessage = it.message ?: "This layout backup is invalid."
+                errorMessage = it.message ?: "Cette sauvegarde de disposition n’est pas valide."
                 clearTransaction(clearMessages = false)
             }
         }
     }
 
     private fun readBounded(uri: Uri): String {
-        val input = activity.contentResolver.openInputStream(uri) ?: error("The selected document could not be opened")
+        val input = activity.contentResolver.openInputStream(uri) ?: error("Impossible d’ouvrir le document sélectionné")
         return input.use {
             val output = java.io.ByteArrayOutputStream()
             val buffer = ByteArray(16 * 1024)
             while (true) {
                 val count = it.read(buffer)
                 if (count < 0) break
-                require(output.size() + count <= MAX_LAYOUT_BACKUP_BYTES) { "Layout backup is larger than 2 MB" }
+                require(output.size() + count <= MAX_LAYOUT_BACKUP_BYTES) { "La sauvegarde de la disposition dépasse 2 Mo" }
                 output.write(buffer, 0, count)
             }
             output.toString(Charsets.UTF_8.name())

@@ -76,7 +76,7 @@ fun encodeLayoutBackup(state: LauncherState, widgetDescriptors: List<BackupWidge
 internal fun exportedWidgetScope(restore: WidgetRestore, currentScope: String) = restore.sourceScope ?: currentScope
 
 fun decodeLayoutBackup(raw: String, currentApps: List<AppEntry>, currentProfiles: List<AppProfile>, currentScope: String): LayoutImportPreview {
-    require(raw.toByteArray(Charsets.UTF_8).size <= MAX_LAYOUT_BACKUP_BYTES) { "Layout backup is larger than 2 MB" }
+    require(raw.toByteArray(Charsets.UTF_8).size <= MAX_LAYOUT_BACKUP_BYTES) { "La sauvegarde de la disposition dépasse 2 Mo" }
     val root = JSONObject(raw)
     val version = root.strictInt("version")
     require(version in 1..LAYOUT_BACKUP_VERSION) { "Unsupported layout backup version" }
@@ -122,11 +122,11 @@ fun decodeLayoutBackup(raw: String, currentApps: List<AppEntry>, currentProfiles
         require((rawSlots + rawLeadingSlots).count(folder.id::equals) == 1)
     }
     val dockArray = root.getJSONArray("dock")
-    require(dockArray.length() == 4)
-    val rawDock = List(4) { index -> if (dockArray.isNull(index)) null else dockArray.getString(index) }
+    require(dockArray.length() in MIN_DOCK_SLOTS..MAX_DOCK_SLOTS)
+    val rawDock = List(dockArray.length()) { index -> if (dockArray.isNull(index)) null else dockArray.getString(index) }
     val surfaceApps = (rawSlots + rawLeadingSlots).filterNotNull().filterNot(::isReservedFolderId) + rawDock.filterNotNull() +
         importedFolders.flatMap(FolderEntry::appIds)
-    require(surfaceApps.distinct().size == surfaceApps.size) { "An app shortcut appears more than once" }
+    require(surfaceApps.distinct().size == surfaceApps.size) { "Un raccourci d’appli apparaît plusieurs fois" }
     val folderResults = importedFolders.associate { folder -> folder.id to folder.copy(appIds = folder.appIds.mapNotNull(::importedApp)) }
     val folders = folderResults.values.filter { it.appIds.size >= 2 }
     val slots = rawSlots.map { value -> when {

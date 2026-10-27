@@ -44,7 +44,7 @@ internal class DiscoverClient(
     fun connect() {
         if (activity.isDestroyed || activity.isFinishing) return
         disconnect()
-        onState("Connecting to Discover…")
+        onState("Connexion à Discover…")
         val attempt = generation
         val callback = object : Binder() {
             override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
@@ -59,7 +59,7 @@ internal class DiscoverClient(
                         if (closing) return@post
                         ready = status and 1 != 0
                         if (ready && resumed) { if (pagerDriven) applyPage() else show() }
-                        else if (!ready) { openRequested = false; dismissal.suspend(); onState("Discover is unavailable right now.") }
+                        else if (!ready) { openRequested = false; dismissal.suspend(); onState("Discover est indisponible pour le moment.") }
                     } else if (pagerDriven && scroll.isFinite() && scroll in 0f..1f) {
                         if (!resumed) return@post
                         lastProgress = scroll
@@ -92,7 +92,7 @@ internal class DiscoverClient(
                 // A rejected or stale Google binding can accept one-way transactions without
                 // supplying the overlay interface. Show recovery instead of waiting for callbacks.
                 if (runCatching { service.interfaceDescriptor }.getOrNull() != OVERLAY) {
-                    failed("Google didn't accept the feed connection. Restart Google, then retry.", attempt)
+                    failed("Google a refusé la connexion au fil. Redémarrez Google, puis réessayez.", attempt)
                     return
                 }
                 remote = service
@@ -126,25 +126,25 @@ internal class DiscoverClient(
             override fun onServiceDisconnected(name: ComponentName) {
                 if (generation == attempt) {
                     remote = null; ready = false; openRequested = false; dismissal.suspend()
-                    onState("Discover disconnected. Tap Retry to reconnect.")
+                    onState("Discover est déconnecté. Touchez Réessayer pour vous reconnecter.")
                 }
             }
-            override fun onNullBinding(name: ComponentName) { failed("The Google app did not provide a feed.", attempt) }
-            override fun onBindingDied(name: ComponentName) { failed("Discover disconnected. Tap Retry to reconnect.", attempt) }
+            override fun onNullBinding(name: ComponentName) { failed("L’appli Google n’a fourni aucun fil.", attempt) }
+            override fun onBindingDied(name: ComponentName) { failed("Discover est déconnecté. Touchez Réessayer pour vous reconnecter.", attempt) }
         }
         val intent = Intent("com.android.launcher3.WINDOW_OVERLAY").setPackage(GOOGLE_PACKAGE)
             .setData(Uri.parse("app://${activity.packageName}:${Process.myUid()}?v=5"))
         try {
             if (activity.bindService(intent, binding, Context.BIND_AUTO_CREATE)) connection = binding
-            else onState("Install or enable the Google app to use Discover.")
+            else onState("Installez ou activez l’appli Google pour utiliser Discover.")
         } catch (e: RuntimeException) {
-            Log.w(TAG, "Cannot bind Discover", e)
-            onState("The Google app couldn't connect to Discover.")
+            Log.w(TAG, "Impossible de lier Discover", e)
+            onState("L’appli Google n’a pas pu se connecter à Discover.")
         }
         handler.postDelayed({
             if (generation == attempt && connection != null && !(if (pagerDriven) ready else everVisible)) {
                 disconnect()
-                onState("Discover is taking a while. You can retry or open Google.")
+                onState("Discover met du temps à charger. Vous pouvez réessayer ou ouvrir Google.")
             }
         }, 12_000)
     }
@@ -237,13 +237,13 @@ internal class DiscoverClient(
             data.writeInterfaceToken(OVERLAY); data.payload()
             if (!binder.transact(code, data, null, IBinder.FLAG_ONEWAY)) throw RemoteException("Unsupported transaction $code")
         } catch (e: RemoteException) {
-            Log.w(TAG, "Discover connection lost", e)
+            Log.w(TAG, "Connexion à Discover perdue", e)
             remote = null; ready = false; dismissal.suspend()
-            onState("Discover disconnected. Tap Retry to reconnect.")
+            onState("Discover est déconnecté. Touchez Réessayer pour vous reconnecter.")
         } catch (e: RuntimeException) {
             Log.w(TAG, "Discover protocol unavailable", e)
             remote = null; ready = false; dismissal.suspend()
-            onState("This Google app version couldn't open Discover.")
+            onState("Cette version de l’appli Google n’a pas pu ouvrir Discover.")
         } finally { data.recycle() }
     }
 

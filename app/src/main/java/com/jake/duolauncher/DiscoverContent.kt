@@ -36,12 +36,12 @@ internal fun DiscoverContent(modifier: Modifier = Modifier) {
                 Spacer(Modifier.height(16.dp))
                 Text(message ?: "", style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(20.dp))
-                FilledTonalButton(onClick = LiveDiscover::retry, Modifier.testTag("discover-retry")) { Text("Retry") }
+                FilledTonalButton(onClick = LiveDiscover::retry, Modifier.testTag("discover-retry")) { Text("Réessayer") }
                 if (googleIntent != null) TextButton(onClick = {
                     runCatching { context.startActivity(googleIntent) }
-                }, Modifier.testTag("discover-open-google")) { Text("Open Google") }
+                }, Modifier.testTag("discover-open-google")) { Text("Ouvrir Google") }
                 TextButton(onClick = { LiveDiscover.onHomeRequest?.invoke() },
-                    Modifier.testTag("discover-return-home")) { Text("Back to Home") }
+                    Modifier.testTag("discover-return-home")) { Text("Retour à l’accueil") }
             }
         }
     }

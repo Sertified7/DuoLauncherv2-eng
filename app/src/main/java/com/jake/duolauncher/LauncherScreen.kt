@@ -184,7 +184,8 @@ fun LauncherScreen(
     val pendingNewPage = widgets.pendingPlacement?.page == homePages
     val visibleHomePages = homePages + if (drag.active || widgetSession != null || pendingNewPage) 1 else 0
     var expandedWorkspace by remember { mutableStateOf(false) }
-    val firstHome = if (DiscoverBounds.available) 1 else 0
+    // Discover now opens the Google app, so Home never reserves a feed page in the pager.
+    val firstHome = 0
     val pageCount = visibleHomePages + 1
     val nativePager = rememberPagerState(initialPage = savedPage.coerceIn(-firstHome, pageCount - 1) + firstHome, pageCount = { pageCount + firstHome })
     val pager = remember(nativePager) { LauncherPager(nativePager, firstHome) }
@@ -203,7 +204,7 @@ fun LauncherScreen(
         }
     }
     val pageGestures = remember(nativePager) { PageGestureLimits(nativePager) }
-    SideEffect { pageGestures.editing = drag.active || widgetSession != null || resizeSlot != null; LiveDiscover.allowNativeOpen = pager.currentPage == 0 && !drag.active && widgetSession == null && resizeSlot == null }
+    SideEffect { pageGestures.editing = drag.active || widgetSession != null || resizeSlot != null; LiveDiscover.allowNativeOpen = false }
     val pageFling = androidx.compose.foundation.pager.PagerDefaults.flingBehavior(nativePager, pagerSnapDistance = pageGestures)
     var nativeMotion by remember { mutableStateOf(false) }
     DisposableEffect(nativePager) {
@@ -423,7 +424,9 @@ fun LauncherScreen(
             val geometry = homeGeometry(maxWidth.value, maxHeight.value, preset, state.labels,
                 statusHeight = if (state.verticalStatus) statusHeight + 22f else 0f,
                 labelHeight = with(density) { 14.sp.toDp().value } + 6f, inLibrary = inLibrary,
-                homeBottomSpace = if (isDefaultHome) 44f else 88f)
+                homeBottomSpace = if (isDefaultHome) 44f else 88f, dockSlots = state.dock.size)
+            // Each screen keeps its own layout: switch to it as soon as the window size says which screen we're on.
+            SideEffect { if (state.surfaceExpanded != geometry.expanded) model.setSurface(geometry.expanded) }
             SideEffect {
                 resizePitchX = with(density) { (geometry.gridWidth / GRID_COLUMNS).dp.toPx() }
                 resizePitchY = with(density) { minOf((geometry.widgetHeight + 18f) / 2f, geometry.rowHeight).dp.toPx() }
@@ -514,7 +517,7 @@ fun LauncherScreen(
                                 (bounds.right - 16 * density.density).toInt(), (bounds.bottom - padding).toInt()), bounds.width)
                     }
                 }
-                .semantics { stateDescription = if (pager.currentPage == -1) "Discover" else if (pager.currentPage == visibleHomePages) "All apps" else "Home page ${pager.currentPage + 1} of $visibleHomePages" }
+                .semantics { stateDescription = if (pager.currentPage == -1) "Discover" else if (pager.currentPage == visibleHomePages) "Toutes les applis" else "Page d’accueil ${pager.currentPage + 1} sur $visibleHomePages" }
             if (geometry.expanded) {
                 Box(pagerModifier) {
                     // PagerState remains the source of truth for native Discover progress,
@@ -589,7 +592,7 @@ fun LauncherScreen(
             }
             Column(Modifier.align(Alignment.BottomStart).width(pagerWidth).padding(start = 16.dp, bottom = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 if (!isDefaultHome) FilledTonalButton(onClick = { sheet = ""; onMakeDefault() }, Modifier.heightIn(min = 48.dp).testTag("home-setup")) {
-                    Icon(Icons.Rounded.Home, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Set as home app")
+                    Icon(Icons.Rounded.Home, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Définir comme appli d’accueil")
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
                     if (!drag.active) IconButton(onClick = openDiscover, Modifier.size(32.dp).testTag("discover-page-link")) {
@@ -597,13 +600,13 @@ fun LauncherScreen(
                     }
                     if (visibleHomePages <= 6) repeat(visibleHomePages) { index ->
                         Box(Modifier.size(28.dp).clip(CircleShape).clickable { scope.launch { pager.animateScrollToPage(index) } }
-                            .semantics { contentDescription = if (index == homePages) "New home page" else "Home page ${index + 1}" }, contentAlignment = Alignment.Center) {
+                            .semantics { contentDescription = if (index == homePages) "Nouvelle page d’accueil" else "Page d’accueil ${index + 1}" }, contentAlignment = Alignment.Center) {
                             if (index == homePages) Icon(Icons.Rounded.Add, null, tint = Color.White, modifier = Modifier.size(14.dp))
                             else Box(Modifier.size(if (index == pager.currentPage) 6.dp else 4.dp).background(Color.White.copy(alpha = if (index == pager.currentPage) 1f else .4f), CircleShape))
                         }
                     } else Text("${minOf(pager.currentPage + 1, homePages)} / $homePages", color = Color.White, fontSize = 12.sp)
                     IconButton(onClick = openLibrary, Modifier.size(32.dp).testTag("library-page-link")) {
-                        Icon(Icons.AutoMirrored.Rounded.FormatListBulleted, "All apps page", tint = Color.White.copy(alpha = if (pager.currentPage == homePages) 1f else .6f), modifier = Modifier.size(17.dp))
+                        Icon(Icons.AutoMirrored.Rounded.FormatListBulleted, "Page Toutes les applis", tint = Color.White.copy(alpha = if (pager.currentPage == homePages) 1f else .6f), modifier = Modifier.size(17.dp))
                     }
                 }
             }
@@ -611,10 +614,10 @@ fun LauncherScreen(
                 .width(preset.dockWidth.dp), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 val controlSize = dockIconSize(geometry.iconSize).dp
-                if (pager.currentPage == -1) CircleControl(Icons.Rounded.ArrowForward, "Back to home", "discover-home", controlSize) { scope.launch { pager.animateScrollToPage(0) } }
+                if (pager.currentPage == -1) CircleControl(Icons.Rounded.ArrowForward, "Retour à l’accueil", "discover-home", controlSize) { scope.launch { pager.animateScrollToPage(0) } }
                 val searchBounds = remember { android.graphics.Rect() }
                 Box(Modifier.onGloballyPositioned { searchBounds.set(it.boundsInWindow().toAndroidBounds()) }) {
-                    CircleControl(Icons.Rounded.Search, if (state.googleSearch) "Search Google" else "Search apps", "search", controlSize) {
+                    CircleControl(Icons.Rounded.Search, if (state.googleSearch) "Rechercher sur Google" else "Rechercher des applis", "search", controlSize) {
                         if (!state.googleSearch || !onGoogleSearch(searchBounds)) openLibrary()
                     }
                 }
@@ -647,7 +650,7 @@ fun LauncherScreen(
                             onClear = { model.removePlacement(DropTarget.Dock(dockSlot)) },
                             onLongClick = { selectedId = it.id; sheet = "" },
                             canSelect = { canPlaceInDock(state.layout, it.id) },
-                            blockedHint = if (state.dock.none { it == null }) "Dock full • Move an app out first" else null)
+                            blockedHint = if (state.dock.none { it == null }) "Dock plein • Retirez d’abord une appli" else null)
                         "pins" -> Column(Modifier.fillMaxHeight(.9f).imePadding()) {
                             Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.End) {
                                 TextButton(onClick = { sheet = "" }) { Text("Done") }
@@ -792,7 +795,7 @@ fun LauncherScreen(
                             widgetSession = WidgetPickerSession(provider, widgetSlot, span, Offset.Zero,
                                 dragging = false, targetIndex = targetIndex)
                             widgetPlacementMessage = if (freeIndex == null)
-                                "There isn’t room for this size. Choose another page or move an item first." else null
+                                "Il n’y a pas de place pour cette taille. Choisissez une autre page ou déplacez d’abord un élément." else null
                             scope.launch { pager.scrollToPage(homeCellPage(targetIndex).coerceIn(0, homePages)) }
                         }
                     },
@@ -821,7 +824,7 @@ fun LauncherScreen(
                         widgetSession = WidgetPickerSession(null, widgetSlot, span, Offset.Zero,
                             dragging = false, targetIndex = free ?: requested, builtinId = builtinId)
                         widgetPlacementMessage = if (free == null)
-                            "There isn’t room for this card. Choose another page or move an item first." else null
+                            "Il n’y a pas de place pour cette carte. Choisissez une autre page ou déplacez d’abord un élément." else null
                         scope.launch { pager.scrollToPage(homeCellPage(free ?: requested).coerceIn(0, homePages)) }
                     },
                     onDragStart = { provider, point ->
@@ -840,7 +843,7 @@ fun LauncherScreen(
                             widgetSession = null; sheet = ""; widgetPackage = null
                         } else {
                             leaveTemporaryWidgetPage(); widgetSession = null
-                            widgetPlacementMessage = "There isn’t room there. Try another space or page."
+                            widgetPlacementMessage = "Il n’y a pas de place ici. Essayez un autre emplacement ou une autre page."
                         }
                     },
                     onCancelDrag = {
@@ -873,8 +876,8 @@ fun LauncherScreen(
                         Row(Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 8.dp)
                             .background(Glass.copy(alpha = .97f), RoundedCornerShape(22.dp))
                             .testTag("widget-placement-toolbar"), verticalAlignment = Alignment.CenterVertically) {
-                            TextButton(onClick = widgetPickerBack) { Text("Back to widgets") }
-                            if (session.candidate != null) Text("Replace here", color = Ink,
+                            TextButton(onClick = widgetPickerBack) { Text("Retour aux widgets") }
+                            if (session.candidate != null) Text("Remplacer ici", color = Ink,
                                 modifier = Modifier.testTag("widget-replacement-locked"))
                             val targetPage = homeCellPage(session.targetIndex ?: 0)
                             if (!session.dragging && session.candidate == null) IconButton(
@@ -883,14 +886,14 @@ fun LauncherScreen(
                                 val page = targetPage - 1
                                 widgetSession = session.copy(targetIndex = homeCellIndex(page, local))
                                 scope.launch { pager.animateScrollToPage(page.coerceAtLeast(0)) }
-                            }) { Icon(Icons.Rounded.ChevronLeft, "Previous home page") }
+                            }) { Icon(Icons.Rounded.ChevronLeft, "Page d’accueil précédente") }
                             Text("${session.span.width} × ${session.span.height}", color = Ink)
                             if (!session.dragging && session.candidate == null) IconButton(enabled = targetPage < homePages, onClick = {
                                 val local = homeCellLocal(session.targetIndex ?: 0)
                                 val page = (targetPage + 1).coerceAtMost(homePages)
                                 widgetSession = session.copy(targetIndex = homeCellIndex(page, local))
                                 scope.launch { pager.animateScrollToPage(page.coerceAtLeast(0)) }
-                            }) { Icon(Icons.Rounded.ChevronRight, "Next home page") }
+                            }) { Icon(Icons.Rounded.ChevronRight, "Page d’accueil suivante") }
                             if (!session.dragging) TextButton(enabled = widgetDraft != null, onClick = {
                                 widgetDraft?.let { draft ->
                                     val contentSize = specialAnchor?.let { bounds -> with(placementDensity) {
@@ -900,9 +903,9 @@ fun LauncherScreen(
                                         ?: session.builtinId?.let { widgets.setBuiltin(draft.copy(id = it)) }
                                     widgetSession = null; sheet = ""; widgetPackage = null
                                 }
-                            }, modifier = Modifier.testTag("widget-placement-apply")) { Text("Place") }
+                            }, modifier = Modifier.testTag("widget-placement-apply")) { Text("Placer") }
                             TextButton(onClick = { leaveTemporaryWidgetPage(); widgetSession = null; sheet = ""; widgetPackage = null },
-                                modifier = Modifier.testTag("widget-placement-cancel")) { Text("Cancel") }
+                                modifier = Modifier.testTag("widget-placement-cancel")) { Text("Annuler") }
                         }
                         if (anchor != null) {
                             val density = LocalDensity.current
@@ -919,7 +922,7 @@ fun LauncherScreen(
                                 else anchor.left + with(density) { 5.dp.toPx() }
                             Surface(Modifier.offset { IntOffset(previewX.roundToInt(), anchor.top.roundToInt()) }
                                 .size(previewWidth, previewHeight).testTag("widget-placement-preview")
-                                .semantics { stateDescription = if (widgetDraft != null) "Ready to place" else "No room here" },
+                                .semantics { stateDescription = if (widgetDraft != null) "Prêt à placer" else "Pas de place ici" },
                                 color = if (widgetDraft != null) Glass.copy(alpha = .82f) else Color(0xFFE7B6B6).copy(alpha = .9f),
                                 shape = RoundedCornerShape(24.dp), border = androidx.compose.foundation.BorderStroke(3.dp,
                                     if (widgetDraft != null) Color.White else Color(0xFFFF6B6B))) {
@@ -932,27 +935,27 @@ fun LauncherScreen(
                                             ?: when (session.builtinId) {
                                                 CLOCK_WIDGET -> "Clock"
                                                 DATE_WIDGET -> "Date"
-                                                else -> "Widget panel"
+                                                else -> "Panneau de widgets"
                                             }, color = Ink,
                                             textAlign = TextAlign.Center)
                                         Text("${session.span.width} × ${session.span.height}", color = Ink)
                                     }
                                     if (widgetDraft == null) Box(Modifier.matchParentSize()
                                         .background(Color(0xFFB83B3B).copy(alpha = .34f)), contentAlignment = Alignment.Center) {
-                                        Text("No room here", color = Color.White, fontWeight = FontWeight.SemiBold)
+                                        Text("Pas de place ici", color = Color.White, fontWeight = FontWeight.SemiBold)
                                     }
                                 }
                             }
                         } else if (session.dragging) {
                             Surface(Modifier.offset { IntOffset((session.pointer.x - 90.dp.toPx()).roundToInt(),
                                 (session.pointer.y - 60.dp.toPx()).roundToInt()) }.size(180.dp, 120.dp)
-                                .testTag("widget-placement-preview").semantics { stateDescription = "No room here" },
+                                .testTag("widget-placement-preview").semantics { stateDescription = "Pas de place ici" },
                                 color = Color(0xFFE7B6B6).copy(alpha = .9f), shape = RoundedCornerShape(24.dp)) {
                                 Box(contentAlignment = Alignment.Center) {
                                     if (sessionEntry != null) WidgetProviderPreview(sessionEntry, session.span,
                                         Modifier.fillMaxSize().padding(5.dp).clip(RoundedCornerShape(18.dp)))
                                     Box(Modifier.matchParentSize().background(Color(0xFFB83B3B).copy(alpha = .34f)),
-                                        contentAlignment = Alignment.Center) { Text("No room here", color = Color.White) }
+                                        contentAlignment = Alignment.Center) { Text("Pas de place ici", color = Color.White) }
                                 }
                             }
                         }
@@ -974,7 +977,7 @@ fun LauncherScreen(
             appsById[drag.source?.appId]?.let { app ->
                 val size = 66.dp
                 val px = with(LocalDensity.current) { size.toPx() }
-                Image(app.icon.asImageBitmap(), "Moving ${app.label}", Modifier
+                Image(app.icon.asImageBitmap(), "Déplacement de ${app.label}", Modifier
                     .offset { IntOffset((drag.pointer.x - drag.rootOrigin.x - px / 2).roundToInt(), (drag.pointer.y - drag.rootOrigin.y - px * .65f).roundToInt()) }
                     .size(size).shadow(16.dp, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp)).testTag("drag-ghost"))
             }
@@ -1005,7 +1008,7 @@ fun LauncherScreen(
                     .padding(top = 10.dp, start = 20.dp, end = 100.dp),
                 color = Glass.copy(alpha = .96f), shape = RoundedCornerShape(18.dp)
             ) {
-                Text("Dock full • Move an app out first",
+                Text("Dock plein • Retirez d’abord une appli",
                     Modifier.padding(horizontal = 16.dp, vertical = 12.dp), color = Ink, fontSize = 13.sp)
             }
             if (drag.moved && drag.source?.target !is DropTarget.Library &&
@@ -1019,7 +1022,7 @@ fun LauncherScreen(
                 Column(Modifier.fillMaxSize().padding(vertical = 6.dp), verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Rounded.DeleteOutline, null)
-                    Text("Remove", fontSize = 11.sp, maxLines = 1)
+                    Text("Retirer", fontSize = 11.sp, maxLines = 1)
                 }
             }
         }
@@ -1059,16 +1062,16 @@ fun LauncherScreen(
                                     resizeHeight = (startHeight + (dy / resizePitchY).roundToInt()).coerceIn(minH, maxH)
                             })
                         }, contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.OpenInFull, "Drag to resize widget", tint = Ink, modifier = Modifier.size(22.dp))
+                        Icon(Icons.Rounded.OpenInFull, "Faites glisser pour redimensionner le widget", tint = Ink, modifier = Modifier.size(22.dp))
                     }
                     Row(Modifier.align(Alignment.TopCenter).padding(top = 8.dp)
                         .background(Glass.copy(alpha = .96f), RoundedCornerShape(20.dp))) {
-                        TextButton(onClick = { resizeSlot = null }) { Text("Cancel") }
+                        TextButton(onClick = { resizeSlot = null }) { Text("Annuler") }
                         TextButton(enabled = valid, onClick = {
                             model.resizeWidget(slot, resizeWidth, resizeHeight); resizeSlot = null
-                        }) { Text("Apply") }
+                        }) { Text("Appliquer") }
                     }
-                    if (!feasible) Text("Move this widget into the six-row grid before resizing.",
+                    if (!feasible) Text("Placez ce widget dans la grille de six rangées avant de le redimensionner.",
                         color = Color.White, modifier = Modifier.align(Alignment.Center).background(Color.Black.copy(alpha = .65f)).padding(8.dp))
                 }
             }
@@ -1110,7 +1113,7 @@ fun LauncherScreen(
         }
         createFolderFirstId?.let { firstId ->
             val first = appsById[firstId]
-            AlertDialog(onDismissRequest = { createFolderFirstId = null }, title = { Text("Create folder with ${first?.label ?: "app"}") },
+            AlertDialog(onDismissRequest = { createFolderFirstId = null }, title = { Text("Créer un dossier avec ${first?.label ?: "l’appli"}") },
                 text = { LazyColumn(Modifier.heightIn(max = 420.dp).testTag("folder-app-picker")) {
                     items(state.apps.filter { it.id != firstId && it.available }, key = { it.id }) { second ->
                         TextButton(onClick = {
@@ -1125,7 +1128,7 @@ fun LauncherScreen(
                             Text(second.label, Modifier.fillMaxWidth())
                         }
                     }
-                } }, confirmButton = { TextButton(onClick = { createFolderFirstId = null }) { Text("Cancel") } })
+                } }, confirmButton = { TextButton(onClick = { createFolderFirstId = null }) { Text("Annuler") } })
         }
         openFolderId?.let { id ->
             state.folders.firstOrNull { it.id == id }?.let { folder ->
@@ -1150,44 +1153,44 @@ fun LauncherScreen(
             }, onCancel = launcherActivity.backups::cancelImport)
         }
         if (launcherActivity.backups.pickerPending) AlertDialog(onDismissRequest = {},
-            title = { Text("Layout document") },
-            text = { Text("The system document picker is still open. Return to it to finish, or cancel this operation.") },
+            title = { Text("Document de disposition") },
+            text = { Text("Le sélecteur de documents du système est encore ouvert. Revenez-y pour terminer, ou annulez l’opération.") },
             confirmButton = { TextButton(onClick = { launcherActivity.backups.resumePendingPicker() },
-                modifier = Modifier.testTag("backup-picker-resume")) { Text("Resume") } },
+                modifier = Modifier.testTag("backup-picker-resume")) { Text("Reprendre") } },
             dismissButton = { TextButton(onClick = launcherActivity.backups::cancelImport,
-                modifier = Modifier.testTag("backup-picker-cancel")) { Text("Cancel") } })
+                modifier = Modifier.testTag("backup-picker-cancel")) { Text("Annuler") } })
         if (launcherActivity.backgrounds.pickerPending && !launcherActivity.backgrounds.loading) AlertDialog(
-            onDismissRequest = {}, title = { Text("Background photo") },
-            text = { Text("The photo picker was interrupted. Resume choosing a photo, or cancel and keep the current background.") },
+            onDismissRequest = {}, title = { Text("Photo d’arrière-plan") },
+            text = { Text("Le sélecteur de photos a été interrompu. Reprenez le choix d’une photo, ou annulez pour garder l’arrière-plan actuel.") },
             confirmButton = { TextButton(onClick = launcherActivity.backgrounds::choosePhoto,
-                modifier = Modifier.testTag("background-picker-resume")) { Text("Resume") } },
+                modifier = Modifier.testTag("background-picker-resume")) { Text("Reprendre") } },
             dismissButton = { TextButton(onClick = launcherActivity.backgrounds::cancelPendingSelection,
-                modifier = Modifier.testTag("background-picker-cancel")) { Text("Cancel") } })
+                modifier = Modifier.testTag("background-picker-cancel")) { Text("Annuler") } })
         (launcherActivity.backups.errorMessage ?: launcherActivity.backups.successMessage)?.let { message ->
             AlertDialog(onDismissRequest = launcherActivity.backups::clearMessage,
-                title = { Text(if (launcherActivity.backups.errorMessage != null) "Layout backup problem" else "Layout backup") },
+                title = { Text(if (launcherActivity.backups.errorMessage != null) "Problème de sauvegarde de la disposition" else "Sauvegarde de la disposition") },
                 text = { Text(message) }, confirmButton = { TextButton(onClick = launcherActivity.backups::clearMessage) { Text("OK") } })
         }
         widgets.failureMessage?.let { message ->
-            AlertDialog(onDismissRequest = widgets::clearFailure, title = { Text("Widget not added") },
+            AlertDialog(onDismissRequest = widgets::clearFailure, title = { Text("Widget non ajouté") },
                 text = { Text(message, Modifier.testTag("widget-bind-error")) },
                 confirmButton = { TextButton(onClick = widgets::clearFailure) { Text("OK") } })
         }
         if (widgets.pendingPlacement != null && widgets.setupStatus != null) {
-            AlertDialog(onDismissRequest = {}, title = { Text("Finish widget setup") },
-                text = { Text("The widget is waiting at its chosen spot. Finish setup to add it, or cancel to remove the placeholder.") },
+            AlertDialog(onDismissRequest = {}, title = { Text("Terminer la configuration du widget") },
+                text = { Text("Le widget attend à l’emplacement choisi. Terminez la configuration pour l’ajouter, ou annulez pour retirer l’emplacement réservé.") },
                 confirmButton = { Button(onClick = widgets::finishPendingSetup,
-                    modifier = Modifier.semantics { contentDescription = "Continue widget setup" }) { Text("Finish setup") } },
+                    modifier = Modifier.semantics { contentDescription = "Continuer la configuration du widget" }) { Text("Terminer la configuration") } },
                 dismissButton = { TextButton(onClick = { leaveTemporaryWidgetPage(); widgets.cancelPendingSetup() },
-                    modifier = Modifier.semantics { contentDescription = "Cancel widget setup" }) { Text("Cancel") } })
+                    modifier = Modifier.semantics { contentDescription = "Annuler la configuration du widget" }) { Text("Annuler") } })
         }
         widgets.reconfigureWidgetId?.let {
-            AlertDialog(onDismissRequest = {}, title = { Text("Widget settings") },
-                text = { Text("Widget settings were interrupted. Resume configuration, or cancel and keep the widget unchanged.") },
+            AlertDialog(onDismissRequest = {}, title = { Text("Réglages du widget") },
+                text = { Text("Les réglages du widget ont été interrompus. Reprenez la configuration, ou annulez pour garder le widget inchangé.") },
                 confirmButton = { Button(onClick = widgets::finishPendingReconfigure,
-                    modifier = Modifier.testTag("widget-reconfigure-resume")) { Text("Resume") } },
+                    modifier = Modifier.testTag("widget-reconfigure-resume")) { Text("Reprendre") } },
                 dismissButton = { TextButton(onClick = widgets::cancelPendingReconfigure,
-                    modifier = Modifier.testTag("widget-reconfigure-cancel")) { Text("Cancel") } })
+                    modifier = Modifier.testTag("widget-reconfigure-cancel")) { Text("Annuler") } })
         }
         }
     }
@@ -1376,7 +1379,7 @@ private fun HomePagePane(
     }
     Box(modifier.testTag("home-page-$page")
         .semantics {
-            onLongClick("Home options") {
+            onLongClick("Options de l’accueil") {
                 if (!drag.active) onEmptyWidget(backgroundTarget)
                 !drag.active
             }
@@ -1540,13 +1543,13 @@ private fun SharedHomeGrid(
                 val height = (rowTop(placement.row + placement.spanY) - y - 18f).coerceAtLeast(48f)
                 if (placement == pending) Surface(Modifier.offset(x = x, y = y.dp).width(width).height(height.dp)
                     .testTag("widget-pending-${placement.slot}").semantics(mergeDescendants = true) {
-                        contentDescription = "Pending ${widgets.pendingProvider?.shortClassName ?: "widget"}"
+                        contentDescription = "En attente : ${widgets.pendingProvider?.shortClassName ?: "widget"}"
                     }, color = Glass.copy(alpha = .72f),
                     shape = RoundedCornerShape(24.dp), border = androidx.compose.foundation.BorderStroke(2.dp, Color.White)) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.Center,
                         horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 3.dp)
-                        Spacer(Modifier.height(8.dp)); Text("Finish widget setup", color = Ink)
+                        Spacer(Modifier.height(8.dp)); Text("Terminer la configuration du widget", color = Ink)
                     }
                 } else MovableWidget(placement.id, placement.slot, widgets, drag, target,
                     Modifier.offset(x = x, y = y.dp).width(width).height(height.dp), page = page) { onWidget(placement.slot) }
@@ -1606,11 +1609,11 @@ private fun DockAppColumn(
             }
             Box(Modifier.fillMaxWidth().height(rowHeight.dp).offset(y = (rowHeight * index).dp)
                 .testTag("dock-slot-$index").dropRegion(drag, cell, savedApp?.id)
-                .semantics(mergeDescendants = true) { contentDescription = savedApp?.label ?: "Choose dock app ${index + 1}" }
+                .semantics(mergeDescendants = true) { contentDescription = savedApp?.label ?: "Choisir l’appli du dock ${index + 1}" }
                 .combinedClickable(interactionSource = interactions[index], indication = LocalIndication.current, role = Role.Button, onClick = {
                     if (savedApp != null) onLaunch(savedApp, launchBounds[index]) else onChoose(index)
                 }, onLongClick = null)
-                .semantics { onLongClick("Choose dock app") { onChoose(index); true } })
+                .semantics { onLongClick("Choisir l’appli du dock") { onChoose(index); true } })
         }
 
         val ids = (savedDock + previewDock).filterNotNull().distinct()
@@ -1646,7 +1649,7 @@ private fun <T> List<T>.slicePage(range: IntRange): List<T> =
 private fun FolderTile(folder: FolderEntry, apps: Map<String, AppEntry>, size: Float, labels: Boolean,
     drag: HomeDragState, page: Int, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Column(modifier.clickable(onClick = onClick).semantics(mergeDescendants = true) {
-        contentDescription = "Folder ${folder.title}, ${folder.appIds.size} apps"
+        contentDescription = "Dossier ${folder.title}, ${folder.appIds.size} applis"
     }, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.size(size.dp).clip(RoundedCornerShape((size * .24f).dp))
             .background(Glass.copy(alpha = .72f)).border(1.dp, Color.White.copy(alpha = .55f), RoundedCornerShape((size * .24f).dp))
@@ -1675,7 +1678,7 @@ private fun AppTile(app: AppEntry, size: Float, labels: Boolean, modifier: Modif
     Column(modifier.fillMaxWidth().heightIn(min = 48.dp).semantics(mergeDescendants = true) { contentDescription = app.label }
         .clickable(interactionSource = interaction, indication = LocalIndication.current,
             role = Role.Button, onClick = { onClick(bounds) })
-        .semantics { onLongClick("App options") { onLongClick(); true } }.padding(horizontal = 2.dp),
+        .semantics { onLongClick("Options de l’appli") { onLongClick(); true } }.padding(horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
         Image(app.icon.asImageBitmap(), null, Modifier.size(iconSize).onGloballyPositioned { bounds.set(it.boundsInWindow().toAndroidBounds()) }
             .graphicsLayer { scaleX = scale; scaleY = scale }.clip(RoundedCornerShape((size * .24f).dp)))
@@ -1704,9 +1707,9 @@ private fun ClockCard(onClick: () -> Unit) {
     val time = currentTime()
     val format = if (android.text.format.DateFormat.is24HourFormat(LocalContext.current)) "HH:mm" else "h:mm"
     GlassCard(onClick = onClick) {
-        Icon(Icons.Rounded.Schedule, "Clock widget; tap to replace", tint = Color.White, modifier = Modifier.size(20.dp))
+        Icon(Icons.Rounded.Schedule, "Widget horloge ; touchez pour remplacer", tint = Color.White, modifier = Modifier.size(20.dp))
         Text(time.format(DateTimeFormatter.ofPattern(format)), color = Color.White, fontWeight = FontWeight.Light, fontSize = 30.sp, maxLines = 1)
-        Text("Local time", color = Color.White.copy(alpha = .8f), fontSize = 11.sp)
+        Text("Heure locale", color = Color.White.copy(alpha = .8f), fontSize = 11.sp)
     }
 }
 
@@ -1726,16 +1729,16 @@ private fun ExpandedCard(onClick: () -> Unit) {
     GlassCard(onClick = onClick) {
         Column {
             Text(date.format(DateTimeFormatter.ofPattern("EEEE")), color = Color.White, fontSize = 22.sp)
-            Text(date.format(DateTimeFormatter.ofPattern("MMMM d")), color = Color.White.copy(alpha = .8f), fontSize = 16.sp)
+            Text(date.format(DateTimeFormatter.ofPattern("d MMMM")), color = Color.White.copy(alpha = .8f), fontSize = 16.sp)
         }
         Column {
             Icon(Icons.Rounded.Widgets, null, tint = Color.White, modifier = Modifier.size(32.dp))
             Spacer(Modifier.height(16.dp))
-            Text("A little more room.", color = Color.White, fontSize = 28.sp, lineHeight = 32.sp, fontWeight = FontWeight.Light)
+            Text("Un peu plus d’espace.", color = Color.White, fontSize = 28.sp, lineHeight = 32.sp, fontWeight = FontWeight.Light)
             Spacer(Modifier.height(12.dp))
-            Text("Add a calendar, photos, or another widget.", color = Color.White.copy(alpha = .85f), fontSize = 14.sp)
+            Text("Ajoutez un agenda, des photos ou un autre widget.", color = Color.White.copy(alpha = .85f), fontSize = 14.sp)
             Spacer(Modifier.height(20.dp))
-            FilledTonalButton(onClick = onClick) { Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Add widget") }
+            FilledTonalButton(onClick = onClick) { Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Ajouter un widget") }
         }
     }
 }
@@ -1751,15 +1754,15 @@ private fun WidgetSlot(id: Int, slot: Int, controller: WidgetController, modifie
                 shape = RoundedCornerShape(24.dp), border = androidx.compose.foundation.BorderStroke(2.dp, Color.White.copy(alpha = .7f))) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(restore?.title ?: "Saved widget", color = Ink, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
-                    Text(restore?.profileLabel ?: "Unavailable profile", color = Ink.copy(alpha = .72f),
+                    Text(restore?.title ?: "Widget enregistré", color = Ink, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+                    Text(restore?.profileLabel?.let(::profileName) ?: "Profil indisponible", color = Ink.copy(alpha = .72f),
                         style = MaterialTheme.typography.bodySmall)
                     restoreMessage?.let { Text(it, color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center) }
                     Row {
                         TextButton(onClick = {
                             if (!controller.rebindRestoredWidget(slot, contentSize = displayedContentSize))
-                                restoreMessage = "That provider or profile isn’t available. Choose a replacement."
+                                restoreMessage = "Ce fournisseur ou ce profil n’est pas disponible. Choisissez un remplacement."
                         },
                             modifier = Modifier.testTag("widget-restore-reconnect-$slot")) { Text("Reconnect") }
                         TextButton(onClick = onAdd, modifier = Modifier.testTag("widget-restore-replace-$slot")) { Text("Replace") }
@@ -1782,8 +1785,8 @@ private fun WidgetSlot(id: Int, slot: Int, controller: WidgetController, modifie
 private fun widgetLabel(id: Int, controller: WidgetController) = when (id) {
     CLOCK_WIDGET -> "Clock"
     DATE_WIDGET -> "Date"
-    INFO_WIDGET -> "Widget panel"
-    EMPTY_WIDGET -> "Add widget"
+    INFO_WIDGET -> "Panneau de widgets"
+    EMPTY_WIDGET -> "Ajouter un widget"
     else -> controller.label(id)
 }
 
@@ -1795,20 +1798,20 @@ private fun MovableWidget(id: Int, slot: Int, controller: WidgetController, drag
         .alpha(if (drag.source?.target == cell) .3f else 1f)
         .border(if (drag.active && target == cell) 2.dp else 0.dp,
             if (drag.active && target == cell) Color.White else Color.Transparent, RoundedCornerShape(24.dp))
-        .semantics { onLongClick("Move or replace widget") { onAdd(); true } }, onAdd) {
+        .semantics { onLongClick("Déplacer ou remplacer le widget") { onAdd(); true } }, onAdd) {
         when (id) {
             CLOCK_WIDGET -> ClockCard(onAdd)
             DATE_WIDGET -> DateCard(onAdd)
             INFO_WIDGET -> if (slot % 3 == 2) ExpandedCard(onAdd) else GlassCard(onClick = onAdd) {
                 Icon(Icons.Rounded.Widgets, null, tint = Color.White, modifier = Modifier.size(28.dp))
-                Text("Your widgets", color = Color.White, fontSize = 15.sp, maxLines = 1)
-                Text("Tap to choose", color = Color.White.copy(alpha = .8f), fontSize = 12.sp)
+                Text("Vos widgets", color = Color.White, fontSize = 15.sp, maxLines = 1)
+                Text("Toucher pour choisir", color = Color.White.copy(alpha = .8f), fontSize = 12.sp)
             }
             else -> Surface(Modifier.fillMaxSize().clickable(onClick = onAdd), color = Glass.copy(alpha = .18f),
                 shape = RoundedCornerShape(24.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = .25f))) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Rounded.Add, null, tint = Color.White)
-                    Text(if (id >= 0) "Widget unavailable" else "Add widget", color = Color.White, fontSize = 12.sp)
+                    Text(if (id >= 0) "Widget indisponible" else "Ajouter un widget", color = Color.White, fontSize = 12.sp)
                 }
             }
         }
@@ -1821,15 +1824,15 @@ private fun AppPicker(apps: List<AppEntry>, dockSlot: Int?, onSelect: (AppEntry)
     var query by rememberSaveable { mutableStateOf("") }
     val filtered = remember(apps, query) { apps.filter { it.label.contains(query.trim(), ignoreCase = true) } }
     Column(Modifier.fillMaxWidth().fillMaxHeight(.88f).padding(horizontal = 20.dp).imePadding()) {
-        Text(if (dockSlot == null) "Your apps" else "Dock position ${dockSlot + 1}", style = MaterialTheme.typography.headlineSmall)
+        Text(if (dockSlot == null) "Vos applis" else "Position du dock ${dockSlot + 1}", style = MaterialTheme.typography.headlineSmall)
         OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(vertical = 16.dp).testTag("search-field"),
-            placeholder = { Text("Search apps") }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true,
-            trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, "Clear search") } }, shape = RoundedCornerShape(20.dp))
-        if (dockSlot != null) TextButton(onClick = onClear) { Text("Leave this position empty") }
+            placeholder = { Text("Rechercher des applis") }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true,
+            trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, "Effacer la recherche") } }, shape = RoundedCornerShape(20.dp))
+        if (dockSlot != null) TextButton(onClick = onClear) { Text("Laisser cet emplacement vide") }
         if (blockedHint != null) Text(blockedHint, color = MaterialTheme.colorScheme.error,
             style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = 8.dp).testTag("dock-full-guidance"))
         LazyColumn(Modifier.weight(1f)) {
-            if (filtered.isEmpty()) item { Text("No apps found", Modifier.padding(vertical = 24.dp)) }
+            if (filtered.isEmpty()) item { Text("Aucune appli trouvée", Modifier.padding(vertical = 24.dp)) }
             items(filtered, key = { it.id }) { app ->
                 val enabled = canSelect(app)
                 Row(Modifier.fillMaxWidth().testTag("picker-app-${app.id}")
@@ -1838,7 +1841,7 @@ private fun AppPicker(apps: List<AppEntry>, dockSlot: Int?, onSelect: (AppEntry)
                     .padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Image(app.icon.asImageBitmap(), null, Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)))
                     Text(app.label, Modifier.padding(start = 16.dp).weight(1f), maxLines = 2)
-                    if (dockSlot != null && enabled) Icon(Icons.Rounded.Add, "Choose ${app.label}")
+                    if (dockSlot != null && enabled) Icon(Icons.Rounded.Add, "Choisir ${app.label}")
                 }
             }
         }
@@ -1859,92 +1862,93 @@ private fun SettingsPanel(state: LauncherState, initiallyWide: Boolean, model: L
     val p = if (wide) state.expanded else state.compact
     Column(Modifier.fillMaxWidth().fillMaxHeight(.92f).padding(horizontal = 24.dp).padding(bottom = 16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Make it yours", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall)
-            IconButton(onClick = onClose) { Icon(Icons.Rounded.Close, "Close customization") }
+            Text("Personnalisez-le", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall)
+            IconButton(onClick = onClose) { Icon(Icons.Rounded.Close, "Fermer la personnalisation") }
         }
         Button(onClick = onMakeDefault, modifier = Modifier.fillMaxWidth().testTag("default-home-settings")) {
-            Text(if (isDefaultHome) "Change home app" else "Set as home app")
+            Text(if (isDefaultHome) "Changer d’appli d’accueil" else "Définir comme appli d’accueil")
         }
-        TextButton(onClick = onEditPins, modifier = Modifier.fillMaxWidth()) { Text("Choose home apps") }
+        TextButton(onClick = onEditPins, modifier = Modifier.fillMaxWidth()) { Text("Choisir les applis de l’accueil") }
         if (state.canUndoEdit) TextButton(onClick = { model.undoEdit(); onClose() }, modifier = Modifier.fillMaxWidth()) {
-            Text("Undo last layout change")
+            Text("Annuler la dernière modification")
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(!wide, { wide = false }, label = { Text("Cover / compact") })
-            FilterChip(wide, { wide = true }, label = { Text("Inner / expanded") })
+            FilterChip(!wide, { wide = false }, label = { Text("Externe / compact") })
+            FilterChip(wide, { wide = true }, label = { Text("Interne / déplié") })
         }
-        SettingSlider("App icon size", "${p.iconSize.toInt()} dp", p.iconSize, 40f..68f) { model.setPreset(wide, p.copy(iconSize = it)) }
-        SettingSlider("Space between rows", "${p.rowGap.toInt()} dp", p.rowGap, 0f..28f) { model.setPreset(wide, p.copy(rowGap = it)) }
-        SettingSlider("Dock width", "${p.dockWidth.toInt()} dp", p.dockWidth, 56f..84f) { model.setPreset(wide, p.copy(dockWidth = it)) }
+        SettingSlider("Taille des icônes", "${p.iconSize.toInt()} dp", p.iconSize, 40f..68f) { model.setPreset(wide, p.copy(iconSize = it)) }
+        SettingSlider("Espace entre les rangées", "${p.rowGap.toInt()} dp", p.rowGap, 0f..28f) { model.setPreset(wide, p.copy(rowGap = it)) }
+        SettingSlider("Largeur du dock", "${p.dockWidth.toInt()} dp", p.dockWidth, 56f..84f) { model.setPreset(wide, p.copy(dockWidth = it)) }
+        DockSizeSetting(state, wide, model)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Align dock with app rows", Modifier.weight(1f))
+            Text("Aligner le dock sur les rangées d’applis", Modifier.weight(1f))
             Switch(p.dockAlignToGrid, { model.setPreset(wide, p.copy(dockAlignToGrid = it)) })
         }
-        if (!p.dockAlignToGrid) SettingSlider("Dock height on screen", "${(p.dockPosition * 100).toInt()}%", p.dockPosition, .25f.. .75f) { model.setPreset(wide, p.copy(dockPosition = it)) }
+        if (!p.dockAlignToGrid) SettingSlider("Hauteur du dock à l’écran", "${(p.dockPosition * 100).toInt()}%", p.dockPosition, .25f.. .75f) { model.setPreset(wide, p.copy(dockPosition = it)) }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Show app names", Modifier.weight(1f)); Switch(state.labels, model::setLabels, Modifier.testTag("label-switch"))
+            Text("Afficher le nom des applis", Modifier.weight(1f)); Switch(state.labels, model::setLabels, Modifier.testTag("label-switch"))
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Status at upper right", Modifier.weight(1f)); Switch(state.verticalStatus, model::setVerticalStatus, Modifier.testTag("status-switch"))
+            Text("État en haut à droite", Modifier.weight(1f)); Switch(state.verticalStatus, model::setVerticalStatus, Modifier.testTag("status-switch"))
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Search button opens Google", Modifier.weight(1f))
+            Text("Le bouton Recherche ouvre Google", Modifier.weight(1f))
             Switch(state.googleSearch, model::setGoogleSearch, Modifier.testTag("google-search-switch"))
         }
-        Text("Opens Google’s search screen. All apps keeps local app search.",
+        Text("Ouvre l’écran de recherche Google. « Toutes les applis » garde la recherche locale.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        TextButton(onClick = { model.setPreset(wide, LayoutPreset()) }) { Text("Reset this layout") }
+        TextButton(onClick = { model.setPreset(wide, LayoutPreset()) }) { Text("Réinitialiser cette disposition") }
         HorizontalDivider(Modifier.padding(vertical = 12.dp))
         TextButton(onClick = onWallpaperPreview, modifier = Modifier.fillMaxWidth().testTag("wallpaper-preview")) {
-            Icon(Icons.Rounded.Wallpaper, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Apply matching wallpaper")
+            Icon(Icons.Rounded.Wallpaper, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Appliquer le fond d’écran assorti")
         }
-        Text("Preview the current launcher background in Android’s wallpaper picker, then choose where to apply it.", style = MaterialTheme.typography.bodySmall,
+        Text("Prévisualisez l’arrière-plan actuel du lanceur dans le sélecteur de fonds d’écran d’Android, puis choisissez où l’appliquer.", style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text("Launcher background", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp))
+        Text("Arrière-plan du lanceur", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp))
         Button(onClick = backgrounds::choosePhoto, enabled = !backgrounds.loading,
-            modifier = Modifier.fillMaxWidth().testTag("background-choose")) { Text("Choose background photo") }
+            modifier = Modifier.fillMaxWidth().testTag("background-choose")) { Text("Choisir la photo d’arrière-plan") }
         if (backgrounds.photoSelected) OutlinedButton(onClick = backgrounds::reset,
-            modifier = Modifier.fillMaxWidth().testTag("background-reset")) { Text("Reset to Duo dunes") }
+            modifier = Modifier.fillMaxWidth().testTag("background-reset")) { Text("Revenir aux dunes Duo") }
         if (backgrounds.loading) LinearProgressIndicator(Modifier.fillMaxWidth().testTag("background-loading"))
         (backgrounds.errorMessage ?: backgrounds.successMessage)?.let { message ->
             TextButton(onClick = backgrounds::clearMessage, Modifier.fillMaxWidth().testTag("background-message")) { Text(message) }
         }
-        Text("The selected photo stays on this device and is not included in layout backups.",
+        Text("La photo choisie reste sur cet appareil et n’est pas incluse dans les sauvegardes de disposition.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         HorizontalDivider(Modifier.padding(vertical = 12.dp))
         AppearanceSettings(appearance, onAppearanceMode, onAppearanceManual, onAppearanceDeviceLocation, onAppearanceClear)
         HorizontalDivider(Modifier.padding(vertical = 12.dp))
-        Text("Layout backup", style = MaterialTheme.typography.titleMedium)
+        Text("Sauvegarde de la disposition", style = MaterialTheme.typography.titleMedium)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onExportLayout, modifier = Modifier.weight(1f).testTag("layout-export")) { Text("Save") }
-            OutlinedButton(onClick = onImportLayout, modifier = Modifier.weight(1f).testTag("layout-import")) { Text("Restore") }
+            OutlinedButton(onClick = onExportLayout, modifier = Modifier.weight(1f).testTag("layout-export")) { Text("Enregistrer") }
+            OutlinedButton(onClick = onImportLayout, modifier = Modifier.weight(1f).testTag("layout-import")) { Text("Restaurer") }
         }
-        Text("Restore always shows a review before changing Home.", style = MaterialTheme.typography.bodySmall)
+        Text("La restauration affiche toujours un aperçu avant de modifier l’accueil.", style = MaterialTheme.typography.bodySmall)
         HorizontalDivider(Modifier.padding(vertical = 12.dp))
         Text("Widgets · Page ${homePage + 1}", style = MaterialTheme.typography.titleMedium)
         state.widgetPlacements.filter { it.page == homePage }.forEach { placement ->
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("${placement.spanX} × ${placement.spanY} widget · row ${placement.row + 1}", Modifier.weight(1f))
+                Text("Widget ${placement.spanX} × ${placement.spanY} · rangée ${placement.row + 1}", Modifier.weight(1f))
                 IconButton(onClick = { onRemoveWidget(placement.slot) },
-                    modifier = Modifier.semantics { contentDescription = "Remove widget" }) {
+                    modifier = Modifier.semantics { contentDescription = "Retirer le widget" }) {
                     Icon(Icons.Rounded.DeleteOutline, null)
                 }
-                TextButton(onClick = { onWidget(placement.slot) }) { Text("Replace") }
+                TextButton(onClick = { onWidget(placement.slot) }) { Text("Remplacer") }
             }
         }
         if (wide) state.widgetPlacements.filter { it.page == -1 }.forEach { placement ->
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Unfolded-only page", Modifier.weight(1f))
+                Text("Page de l’écran déplié", Modifier.weight(1f))
                 IconButton(onClick = { onRemoveWidget(placement.slot) },
-                    modifier = Modifier.semantics { contentDescription = "Remove widget from Unfolded-only page" }) {
+                    modifier = Modifier.semantics { contentDescription = "Retirer le widget de la page de l’écran déplié" }) {
                     Icon(Icons.Rounded.DeleteOutline, null)
                 }
-                TextButton(onClick = { onWidget(placement.slot) }) { Text("Replace") }
+                TextButton(onClick = { onWidget(placement.slot) }) { Text("Remplacer") }
             }
         }
-        TextButton(onClick = { onAddWidget(homePage) }, Modifier.fillMaxWidth()) { Text("Add widget to this page") }
-        Text("Hold and drag an app to move it. Pause at the screen edge to turn pages. Release without moving for options.", style = MaterialTheme.typography.bodySmall,
+        TextButton(onClick = { onAddWidget(homePage) }, Modifier.fillMaxWidth()) { Text("Ajouter un widget à cette page") }
+        Text("Maintenez et faites glisser une appli pour la déplacer. Marquez une pause au bord de l’écran pour changer de page. Relâchez sans bouger pour voir les options.", style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 20.dp))
         }
     }
@@ -1989,49 +1993,49 @@ private fun WidgetActions(
         .padding(horizontal = 24.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Widget options", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall)
-            IconButton(onClick = onClose) { Icon(Icons.Rounded.Close, "Close widget options") }
+            Text("Options du widget", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall)
+            IconButton(onClick = onClose) { Icon(Icons.Rounded.Close, "Fermer les options du widget") }
         }
-        if (canConfigure) ActionRow(Icons.Rounded.Settings, "Widget settings", onConfigure,
+        if (canConfigure) ActionRow(Icons.Rounded.Settings, "Réglages du widget", onConfigure,
             Modifier.testTag("widget-settings-${placement.slot}"))
-        Text("Resize", style = MaterialTheme.typography.titleMedium)
-        Button(enabled = feasible, onClick = { onStartResize(width, height) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Resize on Home") }
-        if (!feasible) Text("Move this widget into the six-row grid before resizing.", color = MaterialTheme.colorScheme.error)
+        Text("Redimensionner", style = MaterialTheme.typography.titleMedium)
+        Button(enabled = feasible, onClick = { onStartResize(width, height) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Redimensionner sur l’accueil") }
+        if (!feasible) Text("Placez ce widget dans la grille de six rangées avant de le redimensionner.", color = MaterialTheme.colorScheme.error)
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
             repeat(homePages) { page -> TextButton(onClick = { onMoveToPage(page) },
-                modifier = Modifier.testTag("widget-move-${placement.slot}-page-$page")) { Text("Move to page ${page + 1}") } }
+                modifier = Modifier.testTag("widget-move-${placement.slot}-page-$page")) { Text("Déplacer vers la page ${page + 1}") } }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Width", Modifier.weight(1f))
+            Text("Largeur", Modifier.weight(1f))
             IconButton(enabled = constraints?.canResizeHorizontally != false,
                 onClick = { if (feasible) width = (width - 1).coerceAtLeast(minWidth) }) {
-                Icon(Icons.Rounded.Remove, "Decrease widget width")
+                Icon(Icons.Rounded.Remove, "Réduire la largeur du widget")
             }
-            Text("$width columns", Modifier.width(88.dp), textAlign = TextAlign.Center)
+            Text("$width colonnes", Modifier.width(88.dp), textAlign = TextAlign.Center)
             IconButton(enabled = constraints?.canResizeHorizontally != false,
                 onClick = { if (feasible) width = (width + 1).coerceAtMost(maxWidth) }) {
-                Icon(Icons.Rounded.Add, "Increase widget width")
+                Icon(Icons.Rounded.Add, "Augmenter la largeur du widget")
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Height", Modifier.weight(1f))
+            Text("Hauteur", Modifier.weight(1f))
             IconButton(enabled = constraints?.canResizeVertically != false,
                 onClick = { if (feasible) height = (height - 1).coerceAtLeast(minHeight) }) {
-                Icon(Icons.Rounded.Remove, "Decrease widget height")
+                Icon(Icons.Rounded.Remove, "Réduire la hauteur du widget")
             }
-            Text("$height rows", Modifier.width(88.dp), textAlign = TextAlign.Center)
+            Text("$height rangées", Modifier.width(88.dp), textAlign = TextAlign.Center)
             IconButton(enabled = constraints?.canResizeVertically != false,
                 onClick = { if (feasible) height = (height + 1).coerceAtMost(maxHeight) }) {
-                Icon(Icons.Rounded.Add, "Increase widget height")
+                Icon(Icons.Rounded.Add, "Augmenter la hauteur du widget")
             }
         }
-        Text("Sizes that overlap another item are ignored.", style = MaterialTheme.typography.bodySmall)
-        if (!valid) Text("That size overlaps another item or extends beyond the page.", color = MaterialTheme.colorScheme.error)
+        Text("Les tailles qui chevauchent un autre élément sont ignorées.", style = MaterialTheme.typography.bodySmall)
+        if (!valid) Text("Cette taille chevauche un autre élément ou dépasse de la page.", color = MaterialTheme.colorScheme.error)
         Button(enabled = valid, onClick = { onResize(width, height); onClose() },
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Apply size") }
-        ActionRow(Icons.Rounded.FindReplace, "Replace", onReplace)
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Appliquer la taille") }
+        ActionRow(Icons.Rounded.FindReplace, "Remplacer", onReplace)
         HorizontalDivider()
-        ActionRow(Icons.Rounded.DeleteOutline, "Remove", onRemove, tint = MaterialTheme.colorScheme.error)
+        ActionRow(Icons.Rounded.DeleteOutline, "Retirer", onRemove, tint = MaterialTheme.colorScheme.error)
         Spacer(Modifier.height(12.dp))
     }
 }

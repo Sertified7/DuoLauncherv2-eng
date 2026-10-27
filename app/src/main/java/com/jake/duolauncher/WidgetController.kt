@@ -51,7 +51,7 @@ class WidgetController(
     private val bind = activity.registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val returnedId = result.data?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, pendingId) ?: pendingId
         if (result.resultCode == Activity.RESULT_OK && returnedId == pendingId) configure() else {
-            if (result.resultCode == Activity.RESULT_OK) failureMessage = "The widget host returned an unexpected binding. Try again."
+            if (result.resultCode == Activity.RESULT_OK) failureMessage = "L’hôte de widgets a renvoyé une liaison inattendue. Réessayez."
             cancel()
         }
     }
@@ -183,7 +183,7 @@ class WidgetController(
     fun add(placement: WidgetPlacement, provider: AppWidgetProviderInfo, grid: WidgetGridSizing? = null,
         contentSize: WidgetContentSize? = null) {
         if (reconfigureWidgetId != null) {
-            failureMessage = "Finish or cancel the open widget settings first."
+            failureMessage = "Terminez ou annulez d’abord les réglages du widget ouverts."
             return
         }
         cancel()
@@ -301,7 +301,7 @@ class WidgetController(
     }
 
     private fun fail() {
-        failureMessage = "This widget could not be added. Try another widget."
+        failureMessage = "Impossible d’ajouter ce widget. Essayez-en un autre."
         cancel()
     }
 
@@ -318,7 +318,7 @@ class WidgetController(
     private fun launchReconfigure(): Boolean {
         val id = reconfigureWidgetId ?: return false
         if (!canReconfigure(id)) {
-            failureMessage = "This widget can no longer be configured."
+            failureMessage = "Ce widget ne peut plus être configuré."
             clearReconfigure()
             return false
         }
@@ -327,7 +327,7 @@ class WidgetController(
             host.startAppWidgetConfigureActivityForResult(activity, id, 0, RECONFIGURE, null)
             true
         } catch (_: Exception) {
-            failureMessage = "This widget could not open its settings."
+            failureMessage = "Ce widget n’a pas pu ouvrir ses réglages."
             clearReconfigure()
             false
         }
@@ -420,7 +420,7 @@ class WidgetController(
         private const val PENDING_OPTIONS = "pendingWidgetOptions"
         private const val PENDING_WIDTH = "pendingWidgetWidth"
         private const val PENDING_HEIGHT = "pendingWidgetHeight"
-        private const val NO_ROOM = "There isn't room for this widget here."
-        private const val CHANGED = "Home changed while the widget was being configured. Choose a space again."
+        private const val NO_ROOM = "Il n’y a pas de place pour ce widget ici."
+        private const val CHANGED = "L’accueil a changé pendant la configuration du widget. Choisissez à nouveau un emplacement."
     }
 }

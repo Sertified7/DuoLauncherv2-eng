@@ -42,7 +42,8 @@ fun upgradePreset(preset: LayoutPreset, schema: Int, expanded: Boolean): LayoutP
     else -> preset
 }
 
-fun homeGeometry(width: Float, height: Float, preset: LayoutPreset, labels: Boolean, statusHeight: Float = 0f, labelHeight: Float = 20f, inLibrary: Boolean = false, homeBottomSpace: Float = 44f): HomeGeometry {
+fun homeGeometry(width: Float, height: Float, preset: LayoutPreset, labels: Boolean, statusHeight: Float = 0f, labelHeight: Float = 20f, inLibrary: Boolean = false, homeBottomSpace: Float = 44f, dockSlots: Int = 4): HomeGeometry {
+    val slots = dockSlots.coerceAtLeast(1).toFloat()
     val p = preset.sanitized()
     val expanded = width >= 650f
     val homeWidth = if (expanded) minOf(460f, width * 0.56f) else width
@@ -57,9 +58,9 @@ fun homeGeometry(width: Float, height: Float, preset: LayoutPreset, labels: Bool
     val topLimit = maxOf(8f, statusHeight)
     val bottomReserve = if (inLibrary) 12f else 124f
     // Outer dock edges span the first through third icon images, excluding the last label.
-    val desiredHeight = if (p.dockAlignToGrid) 2f * row + icon else 256f
+    val desiredHeight = (if (p.dockAlignToGrid) 2f * row + icon else 256f) * slots / 4f
     val dockHeight = minOf(desiredHeight, (height - topLimit - bottomReserve).coerceAtLeast(76f))
-    val dockRowHeight = ((dockHeight - 16f) / 4f).coerceAtLeast(48f)
+    val dockRowHeight = ((dockHeight - 16f) / slots).coerceAtLeast(40f)
     // Use the home position as the anchor, so removing library buttons does not
     // move a low-positioned dock on ordinary page swipes. Move up only to fit.
     val homeDockHeight = minOf(desiredHeight, (height - topLimit - 124f).coerceAtLeast(76f))

@@ -79,6 +79,9 @@ data class SurfaceLayout(
     val widgetRestores: List<WidgetRestore> = emptyList(),
 )
 
+/** Profile labels are stored in English (they are data); show them in French. */
+fun profileName(label: String) = when (label) { "Personal" -> "personnel"; "Work" -> "pro"; else -> label }
+
 fun HomeLayout.toSurface() = SurfaceLayout(slots, leadingSlots, dock, widgetPlacements, folders, widgetRestores)
 
 const val DEFAULT_DOCK_SLOTS = 4
@@ -254,7 +257,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                 persist()
                 completedRefreshes++
             } catch (_: Exception) {
-                mutable.update { it.copy(loading = false, error = "Apps could not be loaded. Tap to retry.") }
+                mutable.update { it.copy(loading = false, error = "Impossible de charger les applis. Touchez pour réessayer.") }
             } finally {
                 refreshing = false
                 if (refreshPending) { refreshPending = false; refresh() }
@@ -653,20 +656,20 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             if (schema >= 8) {
                 val leadingIds = rawLeadingSlots.filterNotNull()
                 require(leadingIds.distinct().size == leadingIds.size) {
-                    "An unfolded-only shortcut appears more than once"
+                    "Un raccourci réservé à l’écran déplié apparaît plusieurs fois"
                 }
                 val leadingApps = leadingIds.filterNot(::isReservedFolderId)
                 val otherApps = rawSlots.filterNotNull().filterNot(::isReservedFolderId) +
                     loadedDock.filterNotNull() + folders.flatMap(FolderEntry::appIds)
                 require(leadingApps.none { it in otherApps }) {
-                    "An unfolded-only app shortcut appears on another surface"
+                    "Un raccourci réservé à l’écran déplié apparaît ailleurs"
                 }
                 val occupiedLeadingCells = rawLeadingSlots.indices
                     .filterTo(mutableSetOf()) { rawLeadingSlots[it] != null }
                     .mapTo(mutableSetOf()) { homeCellIndex(-1, it) }
                 require(placements.filter { it.page == -1 }.none { placement ->
                     placement.coveredIndices().any { it in occupiedLeadingCells }
-                }) { "An unfolded-only shortcut overlaps a widget" }
+                }) { "Un raccourci réservé à l’écran déplié chevauche un widget" }
             }
             val restores = if (schema >= 7) {
                 val array = j.optJSONArray("restores") ?: JSONArray()
@@ -701,7 +704,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             expanded = preset("expanded", LayoutPreset()), verticalStatus = j.optBoolean("verticalStatus", true))
     }.getOrElse {
         statePayloadInvalid = legacyRaw != null
-        LauncherState(loading = false, error = "Saved Home layout could not be read; it was left unchanged.")
+        LauncherState(loading = false, error = "Impossible de lire la disposition enregistrée ; elle n’a pas été modifiée.")
     }
 
     override fun onCleared() { launcherApps.unregisterCallback(callback) }

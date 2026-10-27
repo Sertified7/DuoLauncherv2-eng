@@ -70,17 +70,17 @@ internal fun AppLibrary(
             listOf(Color.White.copy(alpha = .09f), Color.Transparent) else listOf(Color.Transparent, Color.Transparent)))
             .padding(horizontal = 16.dp).padding(top = 18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(if (editing) "Choose home apps" else "All apps", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Medium)
-                Text(if (editing) "${pinned.size} pinned" else "${visibleApps.size}", color = ink, fontSize = 12.sp)
+                Text(if (editing) "Choisir les applis de l’accueil" else "Toutes les applis", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Medium)
+                Text(if (editing) "${pinned.size} épinglées" else "${visibleApps.size}", color = ink, fontSize = 12.sp)
             }
             if (hasWork) Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = !showWork, onClick = { showWork = false }, label = { Text("Personal") })
-                FilterChip(selected = showWork, onClick = { showWork = true }, label = { Text("Work") })
+                FilterChip(selected = !showWork, onClick = { showWork = false }, label = { Text("Personnel") })
+                FilterChip(selected = showWork, onClick = { showWork = true }, label = { Text("Pro") })
             }
             OutlinedTextField(query, onQuery, Modifier.fillMaxWidth().padding(vertical = 12.dp).testTag(if (editing) "pin-search" else "library-search"),
-                placeholder = { Text("Search apps") }, singleLine = true, shape = RoundedCornerShape(16.dp),
+                placeholder = { Text("Rechercher des applis") }, singleLine = true, shape = RoundedCornerShape(16.dp),
                 leadingIcon = { Icon(Icons.Rounded.Search, null) },
-                trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { onQuery("") }) { Icon(Icons.Rounded.Close, "Clear search") } },
+                trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { onQuery("") }) { Icon(Icons.Rounded.Close, "Effacer la recherche") } },
                 colors = if (glass) OutlinedTextFieldDefaults.colors(
                     focusedTextColor = ink, unfocusedTextColor = ink, cursorColor = ink,
                     focusedContainerColor = Color.White.copy(alpha = .18f), unfocusedContainerColor = Color.White.copy(alpha = .12f),
@@ -93,12 +93,12 @@ internal fun AppLibrary(
                 contentPadding = PaddingValues(bottom = 12.dp)) {
                 if (showWork && selectedProfile?.available == false) item("work-paused") {
                     Column(Modifier.fillMaxWidth().padding(vertical = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(if (selectedProfile.quiet) "Work apps are paused" else "Work profile is unavailable")
+                        Text(if (selectedProfile.quiet) "Les applis pro sont en pause" else "Le profil pro est indisponible")
                         if (selectedProfile.quiet) Button(onClick = { onTurnOnWork(selectedProfile.userSerial) },
-                            Modifier.padding(top = 10.dp).testTag("turn-on-work")) { Text("Turn on work apps") }
+                            Modifier.padding(top = 10.dp).testTag("turn-on-work")) { Text("Activer les applis pro") }
                     }
                 }
-                if (groups.isEmpty()) item { Text(if (state.loading) "Loading apps…" else "No apps found", Modifier.padding(vertical = 20.dp)) }
+                if (groups.isEmpty()) item { Text(if (state.loading) "Chargement des applis…" else "Aucune appli trouvée", Modifier.padding(vertical = 20.dp)) }
                 groups.forEach { (letter, entries) ->
                     stickyHeader(key = "heading-$letter") {
                         Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -119,14 +119,14 @@ internal fun AppLibrary(
                         val click = { if (editing) onPin(app.id, !isPinned) else onLaunchFrom(app, launchBounds) }
                         Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).then(dragModifier).clip(RoundedCornerShape(14.dp)).testTag("library-app-${app.id}")
                             .then(if (drag == null) Modifier.combinedClickable(onClick = click, onLongClick = { onActions(app) })
-                                else Modifier.clickable(onClick = click).semantics { onLongClick("App options") { onActions(app); true } })
+                                else Modifier.clickable(onClick = click).semantics { onLongClick("Options de l’appli") { onActions(app); true } })
                             .padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                             Image(app.icon.asImageBitmap(), null, Modifier.size(40.dp)
                                 .onGloballyPositioned { launchBounds.set(it.boundsInWindow().toAndroidBounds()) }.clip(RoundedCornerShape(10.dp)))
                             Text(app.label, Modifier.weight(1f).padding(start = 12.dp), maxLines = 2, fontSize = 14.sp)
                             if (editing) IconButton(onClick = { onPin(app.id, !isPinned) }, Modifier.testTag("pin-${app.id}")) {
                                 Icon(if (isPinned) Icons.Rounded.PushPin else Icons.Outlined.PushPin,
-                                    if (isPinned) "Remove ${app.label} from home" else "Pin ${app.label} to home",
+                                    if (isPinned) "Retirer ${app.label} de l’accueil" else "Épingler ${app.label} à l’accueil",
                                     tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                                     modifier = Modifier.size(20.dp))
                             }

@@ -175,7 +175,7 @@ class DiscoverActivity : DiscoverPageActivity() {
         val bounds = windowManager.currentWindowMetrics.bounds
         fullSize.value = Size(bounds.width().toFloat(), bounds.height().toFloat())
         if (!DiscoverEmbedding.supported(this)) {
-            Toast.makeText(this, "This device can't show Discover beside the dock.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Cet appareil ne peut pas afficher Discover à côté du dock.", Toast.LENGTH_LONG).show()
             DiscoverSession.home(this); return
         }
         lifecycleScope.launch {
@@ -210,17 +210,17 @@ class DiscoverActivity : DiscoverPageActivity() {
     private fun launchApp(app: AppEntry) {
         try {
             val user = getSystemService(UserManager::class.java).getUserForSerialNumber(app.userSerial)
-                ?: throw IllegalStateException("Profile is unavailable")
+                ?: throw IllegalStateException("Profil indisponible")
             getSystemService(LauncherApps::class.java).startMainActivity(
                 app.component, user, null, null)
-        } catch (_: RuntimeException) { Toast.makeText(this, "${app.label} is unavailable.", Toast.LENGTH_SHORT).show() }
+        } catch (_: RuntimeException) { Toast.makeText(this, "${app.label} est indisponible.", Toast.LENGTH_SHORT).show() }
     }
 }
 
 class DiscoverFeedActivity : DiscoverPageActivity() {
     private lateinit var client: DiscoverClient
     private lateinit var frame: DiscoverFrame
-    private val message = mutableStateOf<String?>("Connecting to Discover…")
+    private val message = mutableStateOf<String?>("Connexion à Discover…")
     private var returnAnimator: ValueAnimator? = null
     private var connectRequest = 0
     @SuppressLint("RequiresWindowSdk") // Collection is directly guarded by extensionVersion >= 6.
@@ -251,7 +251,7 @@ class DiscoverFeedActivity : DiscoverPageActivity() {
                 LaunchedEffect(message.value) {
                     showMessage = false
                     // A fast connection should not flash a Retry/loading panel for one frame.
-                    if (message.value == "Connecting to Discover…") { delay(650); frame.hide() }
+                    if (message.value == "Connexion à Discover…") { delay(650); frame.hide() }
                     showMessage = message.value != null
                 }
                 val progress = DiscoverMotion.progress.floatValue
@@ -272,10 +272,10 @@ class DiscoverFeedActivity : DiscoverPageActivity() {
                             Text(message.value ?: "Google Discover", style = MaterialTheme.typography.bodyLarge)
                             Spacer(Modifier.height(20.dp))
                             FilledTonalButton(onClick = ::connectSafely, Modifier.testTag("discover-retry")) {
-                                Icon(Icons.Rounded.Refresh, null); Spacer(Modifier.width(8.dp)); Text("Retry")
+                                Icon(Icons.Rounded.Refresh, null); Spacer(Modifier.width(8.dp)); Text("Réessayer")
                             }
-                            TextButton(onClick = ::openGoogle) { Text("Open Google") }
-                            TextButton(onClick = ::returnHome) { Text("Back to home") }
+                            TextButton(onClick = ::openGoogle) { Text("Ouvrir Google") }
+                            TextButton(onClick = ::returnHome) { Text("Retour à l’accueil") }
                         }
                     }
                     Canvas(Modifier.fillMaxSize()) {
@@ -323,7 +323,7 @@ class DiscoverFeedActivity : DiscoverPageActivity() {
             if (ActivityEmbeddingController.getInstance(this).isActivityEmbedded(this) &&
                 DiscoverBounds.matchesViewport(decor.width, decor.height)) client.connect()
             else if (remaining > 0) decor.postOnAnimation { attachWhenSized(remaining - 1) }
-            else message.value = "Discover couldn't fit beside the dock. Return home and try again."
+            else message.value = "Discover ne tient pas à côté du dock. Revenez à l’accueil et réessayez."
         }
         // Embedding can be reported before the decor has received its inset size. Attaching
         // Google during that gap can briefly create a full-screen white native window.
@@ -332,7 +332,7 @@ class DiscoverFeedActivity : DiscoverPageActivity() {
     private fun openGoogle() {
         val intent = packageManager.getLaunchIntentForPackage(DiscoverClient.GOOGLE_PACKAGE)
         if (intent != null) runCatching { startActivity(intent) }
-        else Toast.makeText(this, "Install or enable the Google app first.", Toast.LENGTH_LONG).show()
+        else Toast.makeText(this, "Installez ou activez d’abord l’appli Google.", Toast.LENGTH_LONG).show()
     }
 }
 
@@ -386,7 +386,7 @@ private fun DiscoverDock(state: LauncherState, status: DeviceStatus, fullSize: S
                 statusHeight = if (state.verticalStatus) statusHeight + 22f else 0f,
                 labelHeight = with(density) { 14.sp.toDp().value } + 6f, inLibrary = true,
                 homeBottomSpace = if (context.getSystemService(android.app.role.RoleManager::class.java)
-                    .isRoleHeld(android.app.role.RoleManager.ROLE_HOME)) 44f else 88f)
+                    .isRoleHeld(android.app.role.RoleManager.ROLE_HOME)) 44f else 88f, dockSlots = state.dock.size)
             if (state.verticalStatus) StatusRail(status, Modifier.align(Alignment.TopEnd).padding(end = 12.dp)
                 .offset(y = geometry.contentTop.dp).width(preset.dockWidth.dp)
                 .onSizeChanged {
@@ -402,7 +402,7 @@ private fun DiscoverDock(state: LauncherState, status: DeviceStatus, fullSize: S
                     state.dock.forEachIndexed { index, id ->
                         val app = apps[id]
                         Box(Modifier.fillMaxWidth().height(geometry.dockRowHeight.dp).testTag("discover-dock-slot-$index")
-                            .semantics { contentDescription = app?.label ?: "Choose dock app on home" }
+                            .semantics { contentDescription = app?.label ?: "Choisir l’appli du dock sur l’accueil" }
                             .clickable(role = Role.Button) { if (app != null) onLaunch(app) else onHome() }, contentAlignment = Alignment.Center) {
                             if (app != null) Image(app.icon.asImageBitmap(), null,
                                 Modifier.size(dockIconSize(geometry.iconSize).dp).clip(RoundedCornerShape(11.dp)))
@@ -413,9 +413,9 @@ private fun DiscoverDock(state: LauncherState, status: DeviceStatus, fullSize: S
             }
             Column(Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 12.dp).width(preset.dockWidth.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 // Home is physically to the right of Discover, matching our fixed page order.
-                FilledTonalIconButton(onClick = onHome, Modifier.testTag("discover-home")) { Icon(Icons.Rounded.ArrowForward, "Back to home") }
+                FilledTonalIconButton(onClick = onHome, Modifier.testTag("discover-home")) { Icon(Icons.Rounded.ArrowForward, "Retour à l’accueil") }
                 Spacer(Modifier.height(8.dp))
-                FilledTonalIconButton(onClick = onSearch) { Icon(Icons.Rounded.Search, "Search apps") }
+                FilledTonalIconButton(onClick = onSearch) { Icon(Icons.Rounded.Search, "Rechercher des applis") }
             }
         }
     }

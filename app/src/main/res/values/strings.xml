@@ -1,5 +1,5 @@
 <resources>
-    <string name="dune_wallpaper_description">Duo dunes — the launcher’s landscape, sized for your display.</string>
-    <string name="shade_service_label">Duo Launcher shade gestures</string>
-    <string name="shade_service_description">Allows Duo Launcher’s Home screen gestures to open the system notifications and Quick Settings panels. It does not read screen content or observe activity in other apps.</string>
+    <string name="dune_wallpaper_description">Dunes Duo — le paysage du lanceur, adapté à votre écran.</string>
+    <string name="shade_service_label">Gestes du volet Duo Launcher</string>
+    <string name="shade_service_description">Permet aux gestes de l’écran d’accueil de Duo Launcher d’ouvrir les notifications et les réglages rapides du système. Ce service ne lit pas le contenu de l’écran et n’observe pas l’activité des autres applis.</string>
 </resources>

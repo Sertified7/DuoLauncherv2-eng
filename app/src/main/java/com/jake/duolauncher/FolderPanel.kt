@@ -41,7 +41,7 @@ internal fun FolderPanel(
         .clickable(
             interactionSource = remember { MutableInteractionSource() },
             indication = null,
-            onClickLabel = "Close folder",
+            onClickLabel = "Fermer le dossier",
             onClick = onDismiss,
         )
         .imePadding().testTag("folder-panel"),
@@ -58,7 +58,7 @@ internal fun FolderPanel(
             Column(Modifier.padding(18.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(title, { title = it }, Modifier.weight(1f).testTag("folder-name"),
-                        singleLine = true, label = { Text("Folder name") })
+                        singleLine = true, label = { Text("Nom du dossier") })
                     TextButton(onClick = { if (title.isNotBlank()) onRename(title); onDismiss() }) { Text("Done") }
                 }
                 LazyVerticalGrid(GridCells.Adaptive(88.dp), Modifier.fillMaxWidth().weight(1f).padding(top = 12.dp),
@@ -90,25 +90,25 @@ private fun FolderChild(
                 Image(app.icon.asImageBitmap(), null, Modifier.size(46.dp).clip(RoundedCornerShape(12.dp)))
                 Text(app.label, Modifier.padding(top = 6.dp), maxLines = 2, overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.labelMedium)
-                if (app.isWork || !app.available) Text(if (app.available) app.profileLabel else "${app.profileLabel} unavailable",
+                if (app.isWork || !app.available) Text(if (app.available) profileName(app.profileLabel) else "${profileName(app.profileLabel)} indisponible",
                     maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall)
             }
             IconButton(onClick = { menu = true }, Modifier.align(Alignment.TopEnd).size(36.dp)
-                .testTag("folder-options-${app.id}")) { Icon(Icons.Rounded.MoreVert, "Move ${app.label}") }
+                .testTag("folder-options-${app.id}")) { Icon(Icons.Rounded.MoreVert, "Déplacer ${app.label}") }
             DropdownMenu(menu, onDismissRequest = { menu = false }) {
                 homeDestinations.distinctBy(::homeCellPage).forEach { destination ->
                     val destinationPage = homeCellPage(destination)
-                    val label = if (destinationPage == -1) "Move to Unfolded-only page" else "Move to page ${destinationPage + 1}"
+                    val label = if (destinationPage == -1) "Déplacer vers la page de l’écran déplié" else "Déplacer vers la page ${destinationPage + 1}"
                     DropdownMenuItem(text = { Text(label) }, onClick = {
                         menu = false; onMoveOut(app.id, DropTarget.Home(destination))
                     }, modifier = Modifier.testTag("folder-move-${app.id}-page-$destinationPage"))
                 }
                 dockVacancies.firstOrNull()?.let { dock ->
-                    DropdownMenuItem(text = { Text("Move to dock") }, onClick = {
+                    DropdownMenuItem(text = { Text("Déplacer vers le dock") }, onClick = {
                         menu = false; onMoveOut(app.id, DropTarget.Dock(dock))
                     }, modifier = Modifier.testTag("folder-move-${app.id}-dock"))
                 }
-                DropdownMenuItem(text = { Text("Remove shortcut") }, onClick = {
+                DropdownMenuItem(text = { Text("Retirer le raccourci") }, onClick = {
                     menu = false; onMoveOut(app.id, DropTarget.Remove)
                 }, modifier = Modifier.testTag("folder-remove-${app.id}"))
             }

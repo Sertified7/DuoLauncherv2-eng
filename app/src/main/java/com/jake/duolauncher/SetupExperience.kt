@@ -91,15 +91,15 @@ internal fun FirstRunSetupSheet(
             }
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
-                Text("Welcome to Duo", style = MaterialTheme.typography.headlineSmall)
+                Text("Bienvenue dans Duo", style = MaterialTheme.typography.headlineSmall)
                 Text(
-                    "A quiet Home screen built for both sides of your foldable.",
+                    "Un écran d’accueil épuré, conçu pour les deux côtés de votre pliable.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             IconButton(onClick = onSkip, Modifier.testTag("setup-close")) {
-                Icon(Icons.Rounded.Close, "Close welcome")
+                Icon(Icons.Rounded.Close, "Fermer l’accueil")
             }
         }
 
@@ -110,35 +110,35 @@ internal fun FirstRunSetupSheet(
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 SetupGuideRow(
                     icon = if (isDefaultHome) Icons.Rounded.Check else Icons.Rounded.Home,
-                    title = if (isDefaultHome) "Duo is your Home app" else "Choose Duo as your Home app",
-                    detail = if (isDefaultHome) "The Home button returns here."
-                        else "Android will show the Home app chooser. You can switch back anytime.",
+                    title = if (isDefaultHome) "Duo est votre appli d’accueil" else "Choisir Duo comme appli d’accueil",
+                    detail = if (isDefaultHome) "Le bouton Accueil ramène ici."
+                        else "Android va afficher le choix de l’appli d’accueil. Vous pourrez revenir en arrière à tout moment.",
                 )
                 if (!isDefaultHome) Button(
                     onClick = onMakeDefault,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("setup-make-default"),
-                ) { Text("Choose Home app") }
+                ) { Text("Choisir l’appli d’accueil") }
                 HorizontalDivider()
                 SetupGuideRow(
                     icon = Icons.Rounded.Widgets,
-                    title = "Make the space useful",
-                    detail = "Add a widget now, or long-press empty space later to customize any page.",
+                    title = "Rendez cet espace utile",
+                    detail = "Ajoutez un widget maintenant, ou appuyez longuement sur un espace vide plus tard pour personnaliser n’importe quelle page.",
                 )
                 OutlinedButton(
                     onClick = onAddWidget,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("setup-add-widget"),
-                ) { Text("Add a widget") }
+                ) { Text("Ajouter un widget") }
             }
         }
 
         Button(
             onClick = onExplore,
             modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp).testTag("setup-explore"),
-        ) { Text("Explore Home") }
+        ) { Text("Découvrir l’accueil") }
         TextButton(
             onClick = onSkip,
             modifier = Modifier.align(Alignment.CenterHorizontally).testTag("setup-skip"),
-        ) { Text("Not now") }
+        ) { Text("Plus tard") }
     }
 }
 
