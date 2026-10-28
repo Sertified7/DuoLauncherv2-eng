@@ -404,7 +404,7 @@ private fun CoverHome(host: PliHost, signals: HostSignals, today: TodayState, dr
         }
         if (!signals.isDefaultHome) DefaultHomeBanner(host::requestDefaultHome, Modifier.align(Alignment.CenterHorizontally).padding(bottom = 8.dp))
         Dock(launcher, Screen.COVER, drag, 54.dp, Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
-            onOpenApp = { a, r -> actions.open(a, r) }, onMenu = actions.menu, onCloseMenu = actions.closeMenu, onSearch = actions.search)
+            onOpenApp = { a, r -> actions.open(a, r) }, onMenu = actions.menu, onCloseMenu = actions.closeMenu, onSearch = null)
     }
 }
 
@@ -429,8 +429,7 @@ private fun InnerHome(host: PliHost, signals: HostSignals, today: TodayState, dr
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Holo.Violet.copy(alpha = .35f), Color.Transparent))))
             Column(Modifier.weight(1f).fillMaxHeight()
                 .homeSwipes(swipesOn, { drag.source != null || pager.currentPage < lead }, actions.drawer, { swipeDown(host, actions, it) }, { up -> actions.gesture(if (up) launcher.settings.twoFingerUp else launcher.settings.twoFingerDown) })) {
-                ClockHeader(today, 66.sp, compact = true, Modifier.padding(start = 26.dp, end = 22.dp, top = 14.dp), onWeather = {},
-                    trailing = { SearchOrb(52.dp, actions.search) })
+                ClockHeader(today, 66.sp, compact = true, Modifier.padding(start = 26.dp, end = 22.dp, top = 14.dp), onWeather = {})
                 Spacer(Modifier.height(16.dp))
                 BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                     val s = launcher.settings
