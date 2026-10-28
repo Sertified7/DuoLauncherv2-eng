@@ -66,6 +66,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.graphics.drawable.toBitmap
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.StickyNote2
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.composed
@@ -239,9 +243,13 @@ private fun AppChoice(app: AppInfo, size: androidx.compose.ui.unit.Dp, onOpen: (
 /** Spotlight-style search: calculator, apps, contacts, settings and the web. */
 @Composable
 fun SearchPanel(launcher: Launcher, modifier: Modifier, onOpen: (AppInfo, Rect?) -> Unit, onHold: (AppInfo, Rect) -> Unit,
-    onClose: () -> Unit, onRequestContacts: () -> Unit) {
+    onClose: () -> Unit, onRequestContacts: () -> Unit, onPliSetting: () -> Unit = {}) {
     val context = LocalContext.current
     var query by rememberSaveable { mutableStateOf("") }
+    // App shortcuts ("Nouveau message", "Itinéraire maison"…), read once when search opens.
+    val allShortcuts by produceState(emptyList<Pair<AppInfo, AppShortcut>>(), launcher.byId) {
+        value = withContext(Dispatchers.IO) { loadAllShortcuts(context, launcher.visibleApps) }
+    }
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() }; keyboard?.show() }
@@ -253,6 +261,14 @@ fun SearchPanel(launcher: Launcher, modifier: Modifier, onOpen: (AppInfo, Rect?)
     val contacts by produceState(emptyList<Contact>(), query, contactsAllowed) { value = searchContacts(context, query) }
     val q = query.trim().normalizedForSearch()
     val settings = remember(q) { if (q.length < 2) emptyList() else settingShortcuts.filter { it.label.normalizedForSearch().contains(q) || it.keywords.contains(q) }.take(3) }
+    val shortcutHits = remember(q, allShortcuts) {
+        if (q.length < 2) emptyList() else allShortcuts.filter { (app, sc) ->
+            sc.label.normalizedForSearch().contains(q) || (app.searchKey.startsWith(q) && q.length >= 3)
+        }.take(5)
+    }
+    val pliHits = remember(q) { if (q.length < 2) emptyList() else PLI_SETTINGS.filter { (label, words) -> label.normalizedForSearch().contains(q) || words.contains(q) }.take(3) }
+    val note = launcher.store.note
+    val noteHit = q.length >= 2 && note.normalizedForSearch().contains(q)
     fun launchFirst() {
         val first = matches.firstOrNull()
         if (first != null) onOpen(first, null) else if (query.isNotBlank()) { webSearch(context, query); onClose() }
@@ -300,6 +316,36 @@ fun SearchPanel(launcher: Launcher, modifier: Modifier, onOpen: (AppInfo, Rect?)
                         contacts.forEach { c ->
                             ResultRow(Icons.Rounded.Person, c.name, "Contact") { startSafely(context, Intent(Intent.ACTION_VIEW, c.lookup)); onClose() }
                         }
+                    }
+                }
+                if (shortcutHits.isNotEmpty()) item {
+                    Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(24.dp), .05f).padding(6.dp)) {
+                        SectionLabel("  Raccourcis")
+                        shortcutHits.forEach { (app, sc) ->
+                            Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(18.dp))
+                                .clickable { startAppShortcut(context, sc); onClose() }.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                                    if (sc.icon != null) Image(sc.icon, null, Modifier.size(34.dp).clip(CircleShape)) else AppIcon(app, 40.dp, showBadge = false)
+                                }
+                                Column(Modifier.padding(start = 14.dp)) {
+                                    Text(sc.label, color = Holo.Ink, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(app.label, color = Holo.Muted, fontSize = 12.sp, maxLines = 1)
+                                }
+                            }
+                        }
+                    }
+                }
+                if (noteHit) item {
+                    Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(24.dp), .05f).padding(6.dp)) {
+                        SectionLabel("  Note Pli")
+                        ResultRow(Icons.Rounded.StickyNote2, note.lines().first().take(60), "Ta note rapide (page Aujourd’hui)") { onClose() }
+                    }
+                }
+                if (pliHits.isNotEmpty()) item {
+                    Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(24.dp), .05f).padding(6.dp)) {
+                        SectionLabel("  Réglages de Pli")
+                        pliHits.forEach { (label, _) -> ResultRow(Icons.Rounded.Tune, label, "Pli") { onPliSetting() } }
                     }
                 }
                 if (settings.isNotEmpty()) item {
@@ -433,3 +479,37 @@ fun AddAppsPanel(launcher: Launcher, screen: Screen, modifier: Modifier, onAdd: 
         }
     }
 }
+
+/** Pli's own settings, for search. */
+private val PLI_SETTINGS = listOf(
+    "Colonnes et lignes" to "grille colonnes lignes taille icones",
+    "Applis dans le dock" to "dock places nombre recentes",
+    "Pack d’icônes" to "icones pack teintees monochrome",
+    "Gestes" to "geste double appui deux doigts verrouiller",
+    "Fond holographique" to "fond ecran wallpaper halos theme",
+    "Météo : choisir une ville" to "meteo ville position",
+    "Sauvegarde de la disposition" to "sauvegarde export import disposition",
+    "Applis masquées" to "masquees cachees",
+    "Verrouiller la disposition" to "verrouiller bloquer disposition",
+    "Page Actus" to "actus actualites news discover",
+)
+
+/** Every shortcut of every app (needs Pli as the home app). */
+fun loadAllShortcuts(context: android.content.Context, apps: List<AppInfo>): List<Pair<AppInfo, AppShortcut>> = runCatching {
+    val launcherApps = context.getSystemService(android.content.pm.LauncherApps::class.java)
+    if (!launcherApps.hasShortcutHostPermission()) return emptyList()
+    val byKey = apps.associateBy { it.packageName + "|" + it.user.hashCode() }
+    val density = context.resources.displayMetrics.densityDpi
+    val query = android.content.pm.LauncherApps.ShortcutQuery().setQueryFlags(
+        android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or
+            android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED)
+    apps.map { it.user }.distinct().flatMap { user ->
+        (runCatching { launcherApps.getShortcuts(query, user) }.getOrNull() ?: emptyList()).mapNotNull { info ->
+            val app = byKey[info.`package` + "|" + user.hashCode()] ?: return@mapNotNull null
+            val label = (info.shortLabel ?: info.longLabel ?: "").toString()
+            if (!info.isEnabled || label.isBlank()) return@mapNotNull null
+            val icon = runCatching { launcherApps.getShortcutIconDrawable(info, density)?.toBitmap(96, 96)?.asImageBitmap() }.getOrNull()
+            app to AppShortcut(info, label, icon)
+        }
+    }
+}.getOrDefault(emptyList())

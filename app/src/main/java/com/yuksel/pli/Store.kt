@@ -25,6 +25,8 @@ data class PliSettings(
     val doubleTap: String = "lock",
     val twoFingerUp: String = "none",
     val twoFingerDown: String = "notifications",
+    val lockLayout: Boolean = false,
+    val recentInDock: Int = 2,
 )
 
 /** Saves the layout, the settings and the quick note in private preferences. */
@@ -60,6 +62,8 @@ class Store(context: Context) {
         doubleTap = prefs.getString("doubleTap", "lock") ?: "lock",
         twoFingerUp = prefs.getString("twoFingerUp", "none") ?: "none",
         twoFingerDown = prefs.getString("twoFingerDown", "notifications") ?: "notifications",
+        lockLayout = prefs.getBoolean("lockLayout", false),
+        recentInDock = prefs.getInt("recentInDock", 2),
     )
 
     fun saveSettings(s: PliSettings) {
@@ -71,7 +75,8 @@ class Store(context: Context) {
             .putString("lat", s.latitude?.toString()).putString("lon", s.longitude?.toString())
             .putBoolean("swipeDownNotifications", s.swipeDownNotifications)
             .putString("iconPack", s.iconPack).putBoolean("tintedIcons", s.tintedIcons).putString("doubleTap", s.doubleTap)
-            .putString("twoFingerUp", s.twoFingerUp).putString("twoFingerDown", s.twoFingerDown).apply()
+            .putString("twoFingerUp", s.twoFingerUp).putString("twoFingerDown", s.twoFingerDown)
+            .putBoolean("lockLayout", s.lockLayout).putInt("recentInDock", s.recentInDock).apply()
     }
 
     /** Everything Pli saved (layout, settings, note) as one JSON document. Android widgets are left out: they belong to this phone. */

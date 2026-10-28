@@ -7,6 +7,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -22,6 +25,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -134,6 +138,11 @@ class DragState {
     fun clear() { source = null; active = false; spot = null }
 
     var trashRect = Rect.Zero
+    /** True: icons can't be moved (layout locked). */
+    var locked = false
+    /** The app under the finger right now (for "swipe up on an icon"). */
+    var pressedId: String? = null
+    var onIconSwipeUp: (String) -> Unit = {}
 
     private fun hit(p: Offset): DropSpot? {
         if (trashRect != Rect.Zero && trashRect.inflate(12f).contains(p)) return DropSpot.Remove
@@ -172,15 +181,23 @@ fun applyDrop(launcher: Launcher, source: DragSource, spot: DropSpot) {
         }
         DropSpot.Dock(spot.screen, index)
     } else spot
-    launcher.update { LayoutEdits.drop(it, source, mapped, launcher.dockSizes) }
+    launcher.edit(if (spot == DropSpot.Remove) "Retiré de l’accueil" else "Déplacé") { LayoutEdits.drop(it, source, mapped, launcher.dockSizes) }
 }
 
 /** Press-and-hold then drag. A hold without moving opens the menu ([onHold]); moving starts the drag and closes it. */
 fun Modifier.dragSource(drag: DragState, source: DragSource, origin: () -> Offset, onHold: () -> Unit,
     onDragStarted: () -> Unit, onDrop: () -> Unit): Modifier = pointerInput(source) {
+    // Remember which icon the finger is on (the home swipe reads it to open the icon's shortcut).
+    awaitEachGesture {
+        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        drag.pressedId = source.itemId
+        do { val e = awaitPointerEvent(PointerEventPass.Initial) } while (e.changes.any { it.pressed })
+        if (drag.pressedId == source.itemId) drag.pressedId = null
+    }
+}.pointerInput(source) {
     detectDragGesturesAfterLongPress(
-        onDragStart = { offset -> drag.begin(source, origin() + offset); onHold() },
-        onDrag = { change, _ -> change.consume(); if (drag.move(origin() + change.position)) onDragStarted() },
+        onDragStart = { offset -> if (!drag.locked) drag.begin(source, origin() + offset); onHold() },
+        onDrag = { change, _ -> change.consume(); if (drag.source != null && drag.move(origin() + change.position)) onDragStarted() },
         onDragEnd = { if (drag.active) onDrop(); drag.clear() },
         onDragCancel = { drag.clear() },
     )
@@ -382,7 +399,7 @@ fun PageDots(pager: PagerState, count: Int, leading: Int, modifier: Modifier = M
 fun Dock(
     launcher: Launcher, screen: Screen, drag: DragState, maxIcon: Dp, modifier: Modifier,
     onOpenApp: (AppInfo, Rect) -> Unit, onMenu: (String, Rect, DragSource) -> Unit, onCloseMenu: () -> Unit,
-    onSearch: (() -> Unit)?,
+    onSearch: (() -> Unit)?, recents: List<AppInfo> = emptyList(),
 ) {
     val ids = launcher.visibleDock(screen)
     val selection = LocalSelection.current
@@ -391,7 +408,7 @@ fun Dock(
     val haptic = LocalHapticFeedback.current
     val highlight = drag.active && spot is DropSpot.Dock
     BoxWithConstraints(modifier) {
-        val count = (ids.size + if (onSearch != null) 1 else 0).coerceAtLeast(1)
+        val count = (ids.size + recents.size + if (onSearch != null) 1 else 0).coerceAtLeast(1)
         val icon = minOf(maxIcon, (maxWidth - 24.dp - 10.dp * count) / count)
         Row(Modifier.fillMaxWidth().height(icon + 24.dp).halo(Holo.Violet.copy(alpha = if (highlight) .22f else 0f), 8.dp)
             .glass(RoundedCornerShape(50), if (highlight) .12f else .07f)
@@ -427,6 +444,17 @@ fun Dock(
                         AppIcon(app, icon)
                         if (selection.active) SelectMark(id in selection.ids, Modifier.align(Alignment.TopStart).offset(x = (-4).dp, y = (-4).dp))
                     }
+                }
+            }
+            if (recents.isNotEmpty()) {
+                // Recently used apps, after a thin line (inner screen).
+                Box(Modifier.width(1.dp).height(icon * .7f).background(Color.White.copy(alpha = .18f)))
+                recents.forEach { app ->
+                    var bounds by remember { mutableStateOf(Rect.Zero) }
+                    Box(Modifier.size(icon).onGloballyPositioned { bounds = it.boundsInRoot() }
+                        .semantics { contentDescription = "Récente : ${app.label}" }
+                        .clickable(remember { MutableInteractionSource() }, null, role = Role.Button) { onOpenApp(app, bounds) }
+                        .alpha(.85f)) { AppIcon(app, icon) }
                 }
             }
             if (onSearch != null) SearchOrb(icon, onSearch)

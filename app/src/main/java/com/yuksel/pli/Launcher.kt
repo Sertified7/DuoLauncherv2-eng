@@ -44,10 +44,38 @@ class Launcher(private val context: Context) {
         loaded = true
     }
 
-    suspend fun reloadApps(removedPackage: String? = null, addedPackage: String? = null) {
-        val list = repository.load(iconStyle())
+    private var rawApps: List<AppInfo> = emptyList()
+    private val customIcons = HashMap<String, Pair<String, androidx.compose.ui.graphics.ImageBitmap>>()
+
+    fun originalLabel(id: String): String? = rawApps.firstOrNull { it.id == id }?.label
+
+    /** Applies the user's names and icons to the system list. */
+    private fun publishApps() {
+        val names = layout.labels
+        val collator = java.text.Collator.getInstance(java.util.Locale.FRANCE).apply { strength = java.text.Collator.PRIMARY }
+        val list = rawApps.map { app ->
+            val label = names[app.id]
+            val icon = customIcons[app.id]?.takeIf { it.first == layout.icons[app.id] }?.second
+            if (label == null && icon == null) app else app.copy(label = label ?: app.label, icon = icon ?: app.icon)
+        }.sortedWith { a, b -> collator.compare(a.label, b.label) }
         apps = list
         byId = list.associateBy { it.id }
+    }
+
+    /** Loads custom icons that are not loaded yet (pack drawables or saved images). */
+    private suspend fun loadCustomIcons() = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val size = (context.resources.displayMetrics.density * 72).toInt().coerceIn(96, 256)
+        layout.icons.forEach { (id, spec) ->
+            if (customIcons[id]?.first == spec) return@forEach
+            CustomIcons.load(context, spec, size)?.let { customIcons[id] = spec to it }
+        }
+    }
+
+    suspend fun reloadApps(removedPackage: String? = null, addedPackage: String? = null) {
+        val list = repository.load(iconStyle())
+        rawApps = list
+        loadCustomIcons()
+        publishApps()
         if (removedPackage != null) {
             val keep = (layout.cover + layout.inner + layout.dock + layout.dockExtra + layout.folders.values.flatMap { it.apps })
                 .filterNot { it.startsWith("$removedPackage/") && it !in byId }.toSet()
@@ -63,8 +91,31 @@ class Launcher(private val context: Context) {
 
     fun update(transform: (HomeLayout) -> HomeLayout) {
         val next = transform(layout)
-        if (next != layout) { layout = next; store.saveLayout(next) }
+        if (next != layout) {
+            val namesChanged = next.labels != layout.labels || next.icons != layout.icons
+            layout = next; store.saveLayout(next)
+            if (namesChanged) { publishApps(); if (next.icons.any { (id, spec) -> customIcons[id]?.first != spec }) iconReloads++ }
+        }
     }
+
+    /** The last change the user can take back, with a short description. */
+    var undo by mutableStateOf<Pair<String, HomeLayout>?>(null); private set
+    var undoStamp by mutableStateOf(0L); private set
+
+    /** A user edit that offers "Annuler" for a few seconds. */
+    fun edit(label: String, transform: (HomeLayout) -> HomeLayout) {
+        val before = layout
+        update(transform)
+        if (layout != before) { undo = label to before; undoStamp = System.currentTimeMillis() }
+    }
+
+    fun undoLast() {
+        val (_, before) = undo ?: return
+        undo = null
+        update { before }
+    }
+
+    fun dismissUndo() { undo = null }
 
     val dockSizes get() = DockSizes(settings.dockSize, settings.innerDockSize)
 
@@ -110,7 +161,7 @@ class Launcher(private val context: Context) {
     fun folderApps(folderId: String): List<AppInfo> =
         layout.folders[folderId]?.apps?.mapNotNull { byId[it] }?.filter { it.id !in layout.hidden } ?: emptyList()
 
-    fun hide(app: AppInfo) = update { l ->
+    fun hide(app: AppInfo) = edit("${app.label} masquée") { l ->
         val folders = l.folders.mapValues { (_, f) -> f.copy(apps = f.apps - app.id) }
         LayoutEdits.clean(l.copy(dock = l.dock - app.id, dockExtra = l.dockExtra - app.id, folders = folders, hidden = l.hidden + app.id)
             .withHome(Screen.COVER, LayoutEdits.blank(l.cover, setOf(app.id))).withHome(Screen.INNER, LayoutEdits.blank(l.inner, setOf(app.id))),
@@ -176,6 +227,22 @@ object UsageLog {
         array.put(JSONArray().put(appId).put(System.currentTimeMillis()))
         val trimmed = JSONArray().also { out -> for (i in maxOf(0, array.length() - MAX) until array.length()) out.put(array.get(i)) }
         prefs.edit().putString("launches", trimmed.toString()).apply()
+    }
+
+    /** The last apps opened, newest first, without duplicates. */
+    fun recent(context: Context, apps: Map<String, AppInfo>, count: Int, exclude: Set<String>): List<AppInfo> {
+        if (count <= 0) return emptyList()
+        val array = runCatching {
+            JSONArray(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("launches", "[]"))
+        }.getOrDefault(JSONArray())
+        val out = LinkedHashSet<String>()
+        for (i in array.length() - 1 downTo 0) {
+            val id = array.optJSONArray(i)?.optString(0) ?: continue
+            if (id in exclude || id !in apps) continue
+            out += id
+            if (out.size >= count) break
+        }
+        return out.mapNotNull { apps[it] }
     }
 
     fun suggestions(context: Context, apps: Map<String, AppInfo>, count: Int): List<AppInfo> {

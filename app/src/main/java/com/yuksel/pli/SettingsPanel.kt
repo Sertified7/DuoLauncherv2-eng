@@ -170,10 +170,14 @@ fun SettingsPanel(
             Section("Écran interne") {
                 ChoiceRow("Colonnes", null, listOf(0, 3, 4, 5, 6, 7, 8), s.innerColumns) { v -> launcher.updateSettings { it.copy(innerColumns = v) } }
                 ChoiceRow("Lignes", null, listOf(0, 4, 5, 6, 7, 8, 9), s.innerRows) { v -> launcher.updateSettings { it.copy(innerRows = v) } }
+                ChoiceRow("Applis récentes au bout du dock", "Les dernières applis ouvertes, après un trait", listOf(0, 1, 2, 3), s.recentInDock) { v ->
+                    launcher.updateSettings { it.copy(recentInDock = v) } }
                 ChoiceRow("Applis dans le dock", "Jusqu’à 10 ; celles en plus n’apparaissent que dépliées", (s.dockSize..10).toList(), s.innerDockSize.coerceAtLeast(s.dockSize)) { v ->
                     launcher.updateSettings { it.copy(innerDockSize = v) } }
             }
             Section("Accueil") {
+                ToggleRow("Verrouiller la disposition", "Empêche de déplacer ou retirer des icônes par erreur", s.lockLayout) { v ->
+                    launcher.updateSettings { it.copy(lockLayout = v) } }
                 ToggleRow("Page Actus", "Tout à gauche : les actualités (Google Actualités, Le Monde, franceinfo)", s.discover) { v -> launcher.updateSettings { it.copy(discover = v) } }
                 ToggleRow("Ajouter les nouvelles applis", "Une appli installée apparaît sur les deux écrans", s.addNewApps) { v -> launcher.updateSettings { it.copy(addNewApps = v) } }
                 ToggleRow("Glisser vers le bas en haut de l’écran", "Ouvre les notifications (ailleurs : la recherche)", s.swipeDownNotifications) { v ->

@@ -46,6 +46,14 @@ data class HomeLayout(
     val innerPages: Int = 1,
     val coverGrid: Grid? = null,
     val innerGrid: Grid? = null,
+    /** Names chosen by the user, by app id. */
+    val labels: Map<String, String> = emptyMap(),
+    /** Custom icons by app id: "pack:<package>/<drawable>" or "file:<name>". */
+    val icons: Map<String, String> = emptyMap(),
+    /** Shortcut id opened by swiping up on an app (else its first shortcut). */
+    val swipeShortcuts: Map<String, String> = emptyMap(),
+    /** Apps that ask for the fingerprint before opening. */
+    val protectedApps: Set<String> = emptySet(),
 ) {
     fun home(screen: Screen) = if (screen == Screen.COVER) cover else inner
     fun withHome(screen: Screen, items: List<String>): HomeLayout {
@@ -78,6 +86,8 @@ data class HomeLayout(
             today.forEach { put(JSONObject().put("key", it.key).put("kind", it.kind).put("widgetId", it.widgetId).put("height", it.height)) }
         })
         put("hidden", JSONArray(hidden.toList()))
+        put("labels", JSONObject(labels as Map<*, *>)); put("icons", JSONObject(icons as Map<*, *>))
+        put("swipeShortcuts", JSONObject(swipeShortcuts as Map<*, *>)); put("protected", JSONArray(protectedApps.toList()))
     }
 
     companion object {
@@ -101,8 +111,12 @@ data class HomeLayout(
                     TodayItem(o.optString("key"), o.optString("kind"), o.optInt("widgetId", -1), o.optInt("height", 0))
                 }
             } ?: HomeLayout().today
+            fun map(name: String): Map<String, String> = json.optJSONObject(name)?.let { o ->
+                o.keys().asSequence().associateWith { o.optString(it) }.filterValues { it.isNotEmpty() }
+            } ?: emptyMap()
             return HomeLayout(strings("cover", true), strings("inner", true), strings("dock"), strings("dockExtra"), folders, today,
-                strings("hidden").toSet(), json.optInt("coverPages", 1), json.optInt("innerPages", 1), grid("coverGrid"), grid("innerGrid"))
+                strings("hidden").toSet(), json.optInt("coverPages", 1), json.optInt("innerPages", 1), grid("coverGrid"), grid("innerGrid"),
+                map("labels"), map("icons"), map("swipeShortcuts"), strings("protected").toSet())
         }
     }
 }
@@ -292,6 +306,30 @@ object LayoutEdits {
         var list = layout.home(screen)
         ids.filter { it !in placed }.distinct().forEach { id -> list = place(list, firstFree(list, fromSlot), id) }
         return withPagesFor(layout.withHome(screen, list), screen)
+    }
+
+    /** Gives [to] the same home pages as [from] (folders are duplicated so each screen keeps its own). */
+    fun copyHome(layout: HomeLayout, from: Screen, to: Screen): HomeLayout {
+        val docked = layout.dockOf(to).toSet()
+        val newFolders = HashMap<String, Folder>()
+        var n = 0
+        val source = layout.grid(from)?.let { g -> layout.grid(to)?.let { regrid(layout.home(from), g, it) } } ?: layout.home(from)
+        val list = source.map { id ->
+            when {
+                id in docked -> EMPTY
+                HomeLayout.isFolder(id) -> layout.folders[id]?.let { f ->
+                    val copyId = HomeLayout.FOLDER_PREFIX + System.nanoTime().toString(36) + (n++)
+                    newFolders[copyId] = f.copy(id = copyId, apps = f.apps.filter { it !in docked })
+                    copyId
+                } ?: EMPTY
+                else -> id
+            }
+        }
+        // Folders only the target screen used are dropped.
+        val oldTargetFolders = layout.home(to).filter(HomeLayout::isFolder).toSet() - layout.home(from).toSet()
+        val updated = layout.copy(folders = layout.folders - oldTargetFolders + newFolders).withHome(to, list)
+            .withPages(to, layout.pages(from))
+        return clean(updated, layout.placedApps(Screen.COVER) + layout.placedApps(Screen.INNER) + newFolders.values.flatMap { it.apps })
     }
 
     /** Adds an empty page at the end. */

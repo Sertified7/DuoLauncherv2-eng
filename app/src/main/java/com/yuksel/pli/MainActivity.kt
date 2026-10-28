@@ -39,6 +39,11 @@ class MainActivity : ComponentActivity(), PliHost {
             toast(if (ok) "Disposition importée" else "Ce fichier n’est pas une sauvegarde Pli")
         }
     }
+    private var imageCallback: ((android.net.Uri) -> Unit)? = null
+    private val pickPicture = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) imageCallback?.invoke(uri)
+        imageCallback = null
+    }
     private val defaultHome = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { refreshDefaultHome() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -163,6 +168,25 @@ class MainActivity : ComponentActivity(), PliHost {
 
     override fun importBackup() {
         importFile.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
+    }
+
+    override fun pickImage(onPicked: (android.net.Uri) -> Unit) {
+        imageCallback = onPicked
+        pickPicture.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
+
+    override fun authenticate(title: String, onSuccess: () -> Unit) {
+        val prompt = android.hardware.biometrics.BiometricPrompt.Builder(this)
+            .setTitle(title)
+            .setSubtitle("Appli protégée dans Pli")
+            .setAllowedAuthenticators(android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_WEAK or
+                android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDENTIAL)
+            .build()
+        runCatching {
+            prompt.authenticate(android.os.CancellationSignal(), mainExecutor, object : android.hardware.biometrics.BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: android.hardware.biometrics.BiometricPrompt.AuthenticationResult?) = onSuccess()
+            })
+        }.onFailure { toast("Aucun verrouillage d’écran configuré") }
     }
 
     override fun expandNotifications() {

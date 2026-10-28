@@ -41,6 +41,12 @@ import androidx.compose.material.icons.rounded.Widgets
 import androidx.compose.material.icons.rounded.Dock
 import androidx.compose.material.icons.rounded.CallSplit
 import androidx.compose.material.icons.rounded.Checklist
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Fingerprint
+import androidx.compose.material.icons.rounded.LockOpen
+import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.SwipeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -62,6 +68,8 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -130,8 +138,9 @@ private fun Divider() {
 @Composable
 fun AppMenu(request: MenuRequest, launcher: Launcher, currentScreen: Screen, onDismiss: () -> Unit,
     onRenameFolder: (String) -> Unit, onUninstall: (AppInfo) -> Unit, onInfo: (AppInfo) -> Unit, onOpenApp: (AppInfo) -> Unit = {},
-    onSelect: (String) -> Unit = {}) {
+    onSelect: (String) -> Unit = {}, onRename: (AppInfo) -> Unit = {}, onChangeIcon: (AppInfo) -> Unit = {}) {
     val context = LocalContext.current
+    val locked = launcher.settings.lockLayout
     Box(Modifier.fillMaxSize()) {
         Scrim(.35f, onDismiss)
         Anchored(request.bounds) {
@@ -144,13 +153,13 @@ fun AppMenu(request: MenuRequest, launcher: Launcher, currentScreen: Screen, onD
                     }
                     Divider()
                     MenuRow(Icons.Rounded.DriveFileRenameOutline, "Renommer") { onRenameFolder(folder.id); onDismiss() }
-                    MenuRow(Icons.Rounded.CallSplit, "Défaire le dossier") {
-                        launcher.update { l -> LayoutEdits.ungroup(l, (request.origin as? Origin.Home)?.screen ?: currentScreen, folder.id) }
+                    if (!locked) MenuRow(Icons.Rounded.CallSplit, "Défaire le dossier") {
+                        launcher.edit("Dossier défait") { l -> LayoutEdits.ungroup(l, (request.origin as? Origin.Home)?.screen ?: currentScreen, folder.id) }
                         onDismiss()
                     }
-                    MenuRow(Icons.Rounded.RemoveCircleOutline, "Retirer de l’accueil", Holo.Pink) {
+                    if (!locked) MenuRow(Icons.Rounded.RemoveCircleOutline, "Retirer de l’accueil", Holo.Pink) {
                         val screen = (request.origin as? Origin.Home)?.screen ?: currentScreen
-                        launcher.update { l -> l.withHome(screen, LayoutEdits.blank(l.home(screen), setOf(folder.id))).copy(folders = l.folders - folder.id) }
+                        launcher.edit("Dossier retiré") { l -> l.withHome(screen, LayoutEdits.blank(l.home(screen), setOf(folder.id))).copy(folders = l.folders - folder.id) }
                         onDismiss()
                     }
                     return@MenuCard
@@ -186,40 +195,58 @@ fun AppMenu(request: MenuRequest, launcher: Launcher, currentScreen: Screen, onD
                 }
                 if (shortcuts.isNotEmpty()) {
                     Divider()
+                    val favourite = launcher.layout.swipeShortcuts[app.id] ?: shortcuts.first().info.id
                     shortcuts.forEach { s ->
+                        val isFavourite = s.info.id == favourite
                         Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(16.dp))
-                            .clickable { startAppShortcut(context, s); onDismiss() }.padding(horizontal = 14.dp),
+                            .clickable { startAppShortcut(context, s); onDismiss() }.padding(start = 14.dp, end = 4.dp),
                             verticalAlignment = Alignment.CenterVertically) {
+                            if (s.icon != null) Image(s.icon, null, Modifier.padding(end = 10.dp).size(22.dp).clip(CircleShape))
                             Text(s.label, color = Holo.Ink, fontSize = 15.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            if (s.icon != null) Image(s.icon, null, Modifier.size(22.dp).clip(CircleShape))
+                            // The arrow marks the shortcut opened by swiping up on the icon; tap it to choose another.
+                            Box(Modifier.size(40.dp).clip(CircleShape).clickable {
+                                launcher.update { l -> l.copy(swipeShortcuts = l.swipeShortcuts + (app.id to s.info.id)) }
+                            }.semantics { contentDescription = "Ouvrir avec le glisser vers le haut" }, contentAlignment = Alignment.Center) {
+                                Icon(Icons.Rounded.SwipeUp, null, tint = if (isFavourite) Holo.Violet else Holo.Muted.copy(alpha = .4f), modifier = Modifier.size(18.dp))
+                            }
                         }
                     }
+                    Text("Glisse vers le haut sur l’icône pour ouvrir le raccourci marqué ↑", color = Holo.Muted, fontSize = 11.sp,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp))
                 }
                 Divider()
                 val layout = launcher.layout
                 val screen = when (val o = request.origin) { is Origin.Home -> o.screen; is Origin.InFolder -> o.screen; else -> currentScreen }
-                when (val o = request.origin) {
+                if (!locked) when (val o = request.origin) {
                     is Origin.InFolder -> MenuRow(Icons.Rounded.Logout, "Sortir du dossier") {
-                        launcher.update { LayoutEdits.moveOutOfFolder(it, o.screen, o.folderId, app.id) }; onDismiss()
+                        launcher.edit("Sorti du dossier") { LayoutEdits.moveOutOfFolder(it, o.screen, o.folderId, app.id) }; onDismiss()
                     }
                     is Origin.Home -> MenuRow(Icons.Rounded.RemoveCircleOutline, "Retirer de l’accueil") {
-                        launcher.update { LayoutEdits.removeFromHome(it, o.screen, app.id) }; onDismiss()
+                        launcher.edit("Retiré de l’accueil") { LayoutEdits.removeFromHome(it, o.screen, app.id) }; onDismiss()
                     }
                     else -> if (app.id !in layout.placedApps(screen)) MenuRow(Icons.Rounded.AddToHomeScreen, "Ajouter à l’accueil") {
                         launcher.update { LayoutEdits.addToHome(it, screen, app.id) }; onDismiss()
                     }
                 }
-                if (request.origin !is Origin.InFolder) {
+                if (request.origin !is Origin.InFolder && !locked) {
                     if (app.id in layout.dockOf(screen)) MenuRow(Icons.Rounded.Dock, "Retirer du dock") {
-                        launcher.update { LayoutEdits.removeFromDock(it, app.id, screen) }; onDismiss()
+                        launcher.edit("Retiré du dock") { LayoutEdits.removeFromDock(it, app.id, screen) }; onDismiss()
                     } else if (layout.dockOf(screen).size < launcher.dockSizes.max(screen)) MenuRow(Icons.Rounded.Dock, "Mettre dans le dock") {
                         launcher.update { LayoutEdits.addToDock(it, app.id, screen, launcher.dockSizes) }; onDismiss()
                     }
                 }
-                if (request.origin is Origin.Home || request.origin == Origin.Dock)
+                if (!locked && (request.origin is Origin.Home || request.origin == Origin.Dock))
                     MenuRow(Icons.Rounded.Checklist, "Sélectionner plusieurs") { onSelect(app.id); onDismiss() }
+                MenuRow(Icons.Rounded.DriveFileRenameOutline, "Renommer") { onRename(app); onDismiss() }
+                MenuRow(Icons.Rounded.Palette, "Changer l’icône") { onChangeIcon(app); onDismiss() }
+                val isProtected = app.id in launcher.layout.protectedApps
+                MenuRow(if (isProtected) Icons.Rounded.LockOpen else Icons.Rounded.Fingerprint,
+                    if (isProtected) "Ne plus protéger" else "Protéger par empreinte") {
+                    launcher.update { l -> l.copy(protectedApps = if (isProtected) l.protectedApps - app.id else l.protectedApps + app.id) }
+                    onDismiss()
+                }
                 MenuRow(Icons.Rounded.Info, "Infos sur l’appli") { onInfo(app); onDismiss() }
-                MenuRow(Icons.Rounded.VisibilityOff, "Masquer l’appli") { launcher.hide(app); onDismiss() }
+                if (!locked) MenuRow(Icons.Rounded.VisibilityOff, "Masquer l’appli") { launcher.hide(app); onDismiss() }
                 MenuRow(Icons.Rounded.Delete, "Désinstaller", Holo.Pink) { onUninstall(app); onDismiss() }
             }
         }
@@ -229,16 +256,23 @@ fun AppMenu(request: MenuRequest, launcher: Launcher, currentScreen: Screen, onD
 /** Long press on an empty spot of the home screen. */
 @Composable
 fun HomeMenu(onDismiss: () -> Unit, onWidgets: (() -> Unit)?, onSettings: () -> Unit, onApps: () -> Unit, onToday: (() -> Unit)?,
-    onAddPage: () -> Unit, onDeletePage: (() -> Unit)?, onSelect: () -> Unit = {}, onAddApps: () -> Unit = {}) {
+    onAddPage: () -> Unit, onDeletePage: (() -> Unit)?, onSelect: () -> Unit = {}, onAddApps: () -> Unit = {},
+    locked: Boolean = false, onLock: (Boolean) -> Unit = {}, copyFrom: String? = null, onCopy: () -> Unit = {}) {
     Box(Modifier.fillMaxSize()) {
         Scrim(.35f, onDismiss)
         Anchored(Rect.Zero) {
             MenuCard {
                 Text("Pli", color = Holo.Muted, fontSize = 12.sp, letterSpacing = 2.sp, modifier = Modifier.padding(10.dp))
-                MenuRow(Icons.Rounded.AddToHomeScreen, "Ajouter des applis") { onDismiss(); onAddApps() }
-                MenuRow(Icons.Rounded.Checklist, "Sélectionner des applis") { onDismiss(); onSelect() }
-                MenuRow(Icons.Rounded.AddBox, "Ajouter une page") { onDismiss(); onAddPage() }
-                if (onDeletePage != null) MenuRow(Icons.Rounded.DeleteSweep, "Supprimer cette page", Holo.Pink) { onDismiss(); onDeletePage() }
+                if (!locked) {
+                    MenuRow(Icons.Rounded.AddToHomeScreen, "Ajouter des applis") { onDismiss(); onAddApps() }
+                    MenuRow(Icons.Rounded.Checklist, "Sélectionner des applis") { onDismiss(); onSelect() }
+                    MenuRow(Icons.Rounded.AddBox, "Ajouter une page") { onDismiss(); onAddPage() }
+                    if (onDeletePage != null) MenuRow(Icons.Rounded.DeleteSweep, "Supprimer cette page", Holo.Pink) { onDismiss(); onDeletePage() }
+                    if (copyFrom != null) MenuRow(Icons.Rounded.ContentCopy, "Copier la disposition de $copyFrom") { onDismiss(); onCopy() }
+                }
+                MenuRow(if (locked) Icons.Rounded.LockOpen else Icons.Rounded.Lock, if (locked) "Déverrouiller la disposition" else "Verrouiller la disposition") {
+                    onDismiss(); onLock(!locked)
+                }
                 if (onWidgets != null) MenuRow(Icons.Rounded.Widgets, "Ajouter un widget") { onDismiss(); onWidgets() }
                 if (onToday != null) MenuRow(Icons.Rounded.ViewDay, "Modifier « Aujourd’hui »") { onDismiss(); onToday() }
                 MenuRow(Icons.Rounded.Apps, "Toutes les applis") { onDismiss(); onApps() }
