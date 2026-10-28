@@ -286,7 +286,7 @@ fun PliApp(host: PliHost, signals: HostSignals) {
                     onClose = { panel = Panel.NONE })
             }
             FullPanel(panel == Panel.SETTINGS) {
-                key(signals.resumes) {
+                run {
                     SettingsPanel(launcher, signals.isDefaultHome, today.notificationsAllowed, it,
                         onClose = { panel = Panel.NONE }, onMakeDefault = host::requestDefaultHome,
                         onNotificationAccess = host::openNotificationAccess,
