@@ -52,6 +52,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
@@ -60,6 +64,9 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -157,7 +164,8 @@ fun PliApp(host: PliHost, signals: HostSignals) {
     LaunchedEffect(launcher.iconReloads) { if (launcher.iconReloads > 0) launcher.reloadApps() }
 
 
-    fun closeAll() { panel = Panel.NONE; menu = null; folder = null; todayEditing = false; drag.clear() }
+    val selection = remember { Selection() }
+    fun closeAll() { panel = Panel.NONE; menu = null; folder = null; todayEditing = false; drag.clear(); selection.clear() }
     LaunchedEffect(signals.homePresses) { if (signals.homePresses > 0) { closeAll(); article = null } }
     BackHandler(panel != Panel.NONE || menu != null || folder != null || todayEditing) {
         when {
@@ -200,7 +208,8 @@ fun PliApp(host: PliHost, signals: HostSignals) {
         gesture = ::runGesture, read = { article = it },
     )
 
-    CompositionLocalProvider(LocalBubbles provides launcher.settings.bubbles, LocalBadges provides badges) {
+    BackHandler(selection.active) { selection.clear() }
+    CompositionLocalProvider(LocalBubbles provides launcher.settings.bubbles, LocalBadges provides badges, LocalSelection provides selection) {
         Box(Modifier.fillMaxSize()) {
             HoloBackground(launcher.settings.phoneWallpaper, launcher.settings.parallax)
             // Home ignores the keyboard so the grid never changes size while typing.
@@ -208,11 +217,43 @@ fun PliApp(host: PliHost, signals: HostSignals) {
                 val wide = maxWidth >= 600.dp
                 val current = if (wide) Screen.INNER else Screen.COVER
                 SideEffect { if (screen != current) { screen = current; drag.clear() } }
-                val swipesOn = panel == Panel.NONE && menu == null && folder == null && !drag.active
+                val swipesOn = panel == Panel.NONE && menu == null && folder == null && !drag.active && !selection.active
                 if (wide) key("inner", launcher.settings.discover) { InnerHome(host, signals, today, drag, actions, swipesOn, showToday) }
                 else key("cover", launcher.settings.discover) { CoverHome(host, signals, today, drag, actions, swipesOn, showToday) }
             }
+            // Bin at the top while dragging: drop an icon on it to take it off the home screen.
+            if (drag.active) Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars).padding(top = 10.dp),
+                contentAlignment = Alignment.TopCenter) {
+                val over = drag.spot == DropSpot.Remove
+                Row(Modifier.onGloballyPositioned { drag.trashRect = it.boundsInRoot() }
+                    .halo(Holo.Badge.copy(alpha = if (over) .45f else .15f), 16.dp)
+                    .glass(RoundedCornerShape(50), if (over) .2f else .1f)
+                    .padding(horizontal = 22.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Delete, null, tint = if (over) Holo.Badge else Holo.Ink)
+                    Text("Retirer de l’accueil", color = if (over) Holo.Badge else Holo.Ink, fontSize = 14.sp, modifier = Modifier.padding(start = 10.dp))
+                }
+            } else SideEffect { drag.trashRect = Rect.Zero }
             DragGhost(launcher, drag, if (screen == Screen.INNER) 62.dp else 60.dp)
+            // Selection mode: pick several icons, then remove them together.
+            if (selection.active) Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars).padding(top = 10.dp),
+                contentAlignment = Alignment.TopCenter) {
+                Row(Modifier.halo(Holo.Violet.copy(alpha = .2f), 14.dp).glass(RoundedCornerShape(50), .14f)
+                    .padding(start = 18.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val n = selection.ids.size
+                    Text(if (n == 0) "Touche les applis à retirer" else "$n sélectionnée" + if (n > 1) "s" else "",
+                        color = Holo.Ink, fontSize = 14.sp, modifier = Modifier.padding(end = 12.dp))
+                    if (n > 0) Row(Modifier.clip(RoundedCornerShape(50)).background(Holo.Badge.copy(alpha = .85f))
+                        .clickable {
+                            val ids = selection.ids.toSet()
+                            launcher.update { LayoutEdits.removeMany(it, screen, ids) }
+                            selection.clear()
+                        }.padding(horizontal = 14.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Delete, null, tint = Color(0xFF1A0512), modifier = Modifier.size(18.dp))
+                        Text("Retirer", color = Color(0xFF1A0512), fontSize = 14.sp, modifier = Modifier.padding(start = 6.dp))
+                    }
+                    PillButton("Terminé", onClick = selection::clear)
+                }
+            }
 
             FullPanel(article != null) { m -> article?.let { ArticleReader(it, m) { article = null } } }
             FullPanel(panel == Panel.SEARCH) {
@@ -260,6 +301,7 @@ fun PliApp(host: PliHost, signals: HostSignals) {
                     onSettings = { panel = Panel.SETTINGS }, onApps = { panel = Panel.DRAWER },
                     onToday = if (menuScreen == Screen.INNER) ({ todayEditing = true }) else null,
                     onAddPage = { launcher.update { LayoutEdits.addPage(it, menuScreen) } },
+                    onSelect = { selection.start(null) },
                     onDeletePage = if (pageEmpty && launcher.layout.pages(menuScreen) > 1)
                         ({ launcher.update { LayoutEdits.deletePage(it, menuScreen, page, cap) } }) else null)
             }
@@ -270,7 +312,8 @@ fun PliApp(host: PliHost, signals: HostSignals) {
             menu?.let { request ->
                 AppMenu(request, launcher, screen, onDismiss = { menu = null },
                     onRenameFolder = { id -> folder = id to screen; renameFolder = true },
-                    onUninstall = host::uninstall, onInfo = host::appInfo, onOpenApp = { open(it, null) })
+                    onUninstall = host::uninstall, onInfo = host::appInfo, onOpenApp = { open(it, null) },
+                    onSelect = { selection.start(it) })
             }
         }
     }
@@ -340,21 +383,31 @@ private fun CoverHome(host: PliHost, signals: HostSignals, today: TodayState, dr
     val pager = rememberPagerState(initialPage = lead) { lead + homePages + if (drag.active) 1 else 0 }
     HomePressScroll(signals, pager, lead)
     Column(Modifier.fillMaxSize().homeSwipes(swipesOn, { drag.source != null || pager.currentPage < lead }, actions.drawer, { swipeDown(host, actions, it) }, { up -> actions.gesture(if (up) launcher.settings.twoFingerUp else launcher.settings.twoFingerDown) })) {
-        ClockHeader(today, 84.sp, compact = false, Modifier.padding(start = 22.dp, end = 22.dp, top = 10.dp), onWeather = {},
-            nowPlaying = nowPlaying, onOpenPlaying = { host.openPackage(it) })
-        Spacer(Modifier.height(10.dp))
+        // The clock sits above the home pages only: it slides away with them when the Actus page comes in.
+        val density = LocalDensity.current
+        var headerHeight by remember { mutableStateOf(206.dp) }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val s = launcher.settings
-            val metrics = gridMetrics(maxWidth, maxHeight - 18.dp, s.labels, wide = false, s.coverColumns, s.coverRows)
+            val metrics = gridMetrics(maxWidth, maxHeight - headerHeight - 18.dp, s.labels, wide = false, s.coverColumns, s.coverRows)
             val pages = maxOf(launcher.layout.coverPages, (items.size + metrics.capacity - 1) / metrics.capacity, 1)
             SideEffect { homePages = pages; launcher.useGrid(Screen.COVER, Grid(metrics.columns, metrics.rows)) }
             Column(Modifier.fillMaxSize()) {
                 HomePages(Screen.COVER, launcher, items, metrics, pager, lead, drag, s.labels, Modifier.weight(1f),
                     onOpenApp = { a, r -> actions.open(a, r) }, onOpenFolder = actions.openFolder,
                     onMenu = actions.menu, onCloseMenu = actions.closeMenu, onEmptyHold = { actions.emptyHold(Screen.COVER, it, metrics.capacity) },
-                    onEmptyDoubleTap = { actions.gesture(launcher.settings.doubleTap) }, homePages = pages,
-                    leadingPage = { NewsPage(Modifier.fillMaxSize().padding(horizontal = 16.dp), actions.read) })
+                    onEmptyDoubleTap = { actions.gesture(launcher.settings.doubleTap) }, homePages = pages, topPadding = headerHeight,
+                    leadingPage = { NewsPage(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp), actions.read) })
                 PageDots(pager, pager.pageCount, lead, modifier = Modifier.align(Alignment.CenterHorizontally))
+            }
+            val position = pager.currentPage + pager.currentPageOffsetFraction
+            val shown = if (lead == 0) 1f else (position - (lead - 1)).coerceIn(0f, 1f)
+            if (shown > 0f) {
+                val widthPx = with(density) { maxWidth.toPx() }
+                ClockHeader(today, 84.sp, compact = false,
+                    Modifier.graphicsLayer { alpha = shown; translationX = (1f - shown) * widthPx }
+                        .onSizeChanged { with(density) { headerHeight = it.height.toDp() + 10.dp } }
+                        .padding(start = 22.dp, end = 22.dp, top = 10.dp), onWeather = {},
+                    nowPlaying = nowPlaying, onOpenPlaying = { host.openPackage(it) })
             }
         }
         if (!signals.isDefaultHome) DefaultHomeBanner(host::requestDefaultHome, Modifier.align(Alignment.CenterHorizontally).padding(bottom = 8.dp))

@@ -116,6 +116,8 @@ sealed interface DropSpot {
     /** Onto the item at [index] (an app or a folder): makes or fills a folder. */
     data class Into(val screen: Screen, val index: Int) : DropSpot
     data class Dock(val screen: Screen, val index: Int) : DropSpot
+    /** On the bin: taken off the home screen or dock (the app stays in the app list). */
+    data object Remove : DropSpot
 }
 
 /** Where a dragged item came from. */
@@ -219,6 +221,7 @@ object LayoutEdits {
             is DragSource.InFolder -> takeOutOfFolder(layout, source.folderId, id)
         }
         when (spot) {
+            DropSpot.Remove -> return if (HomeLayout.isFolder(id)) base.copy(folders = base.folders - id) else base
             is DropSpot.Home -> {
                 // Keep untrimmed slots while placing (the source slot may be just before the target).
                 val list = if (source is DragSource.Home && source.screen == spot.screen)
@@ -277,6 +280,11 @@ object LayoutEdits {
         apps.drop(1).forEach { list = place(list, firstFree(list, index + 1), it) }
         return withPagesFor(layout.copy(folders = layout.folders - folderId).withHome(screen, list), screen)
     }
+
+    /** Takes several apps or folders off a screen's home and the dock at once. */
+    fun removeMany(layout: HomeLayout, screen: Screen, ids: Set<String>): HomeLayout =
+        layout.copy(dock = layout.dock - ids, dockExtra = layout.dockExtra - ids, folders = layout.folders - ids)
+            .withHome(screen, blank(layout.home(screen), ids))
 
     /** Adds an empty page at the end. */
     fun addPage(layout: HomeLayout, screen: Screen) = layout.withPages(screen, layout.pages(screen) + 1)

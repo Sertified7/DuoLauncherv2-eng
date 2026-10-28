@@ -40,6 +40,7 @@ import androidx.compose.material.icons.rounded.ViewDay
 import androidx.compose.material.icons.rounded.Widgets
 import androidx.compose.material.icons.rounded.Dock
 import androidx.compose.material.icons.rounded.CallSplit
+import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -128,7 +129,8 @@ private fun Divider() {
 /** The long-press menu of an app: its shortcuts, then home/dock/folder actions. */
 @Composable
 fun AppMenu(request: MenuRequest, launcher: Launcher, currentScreen: Screen, onDismiss: () -> Unit,
-    onRenameFolder: (String) -> Unit, onUninstall: (AppInfo) -> Unit, onInfo: (AppInfo) -> Unit, onOpenApp: (AppInfo) -> Unit = {}) {
+    onRenameFolder: (String) -> Unit, onUninstall: (AppInfo) -> Unit, onInfo: (AppInfo) -> Unit, onOpenApp: (AppInfo) -> Unit = {},
+    onSelect: (String) -> Unit = {}) {
     val context = LocalContext.current
     Box(Modifier.fillMaxSize()) {
         Scrim(.35f, onDismiss)
@@ -214,6 +216,8 @@ fun AppMenu(request: MenuRequest, launcher: Launcher, currentScreen: Screen, onD
                         launcher.update { LayoutEdits.addToDock(it, app.id, screen, launcher.dockSizes) }; onDismiss()
                     }
                 }
+                if (request.origin is Origin.Home || request.origin == Origin.Dock)
+                    MenuRow(Icons.Rounded.Checklist, "Sélectionner plusieurs") { onSelect(app.id); onDismiss() }
                 MenuRow(Icons.Rounded.Info, "Infos sur l’appli") { onInfo(app); onDismiss() }
                 MenuRow(Icons.Rounded.VisibilityOff, "Masquer l’appli") { launcher.hide(app); onDismiss() }
                 MenuRow(Icons.Rounded.Delete, "Désinstaller", Holo.Pink) { onUninstall(app); onDismiss() }
@@ -225,12 +229,13 @@ fun AppMenu(request: MenuRequest, launcher: Launcher, currentScreen: Screen, onD
 /** Long press on an empty spot of the home screen. */
 @Composable
 fun HomeMenu(onDismiss: () -> Unit, onWidgets: (() -> Unit)?, onSettings: () -> Unit, onApps: () -> Unit, onToday: (() -> Unit)?,
-    onAddPage: () -> Unit, onDeletePage: (() -> Unit)?) {
+    onAddPage: () -> Unit, onDeletePage: (() -> Unit)?, onSelect: () -> Unit = {}) {
     Box(Modifier.fillMaxSize()) {
         Scrim(.35f, onDismiss)
         Anchored(Rect.Zero) {
             MenuCard {
                 Text("Pli", color = Holo.Muted, fontSize = 12.sp, letterSpacing = 2.sp, modifier = Modifier.padding(10.dp))
+                MenuRow(Icons.Rounded.Checklist, "Sélectionner des applis") { onDismiss(); onSelect() }
                 MenuRow(Icons.Rounded.AddBox, "Ajouter une page") { onDismiss(); onAddPage() }
                 if (onDeletePage != null) MenuRow(Icons.Rounded.DeleteSweep, "Supprimer cette page", Holo.Pink) { onDismiss(); onDeletePage() }
                 if (onWidgets != null) MenuRow(Icons.Rounded.Widgets, "Ajouter un widget") { onDismiss(); onWidgets() }

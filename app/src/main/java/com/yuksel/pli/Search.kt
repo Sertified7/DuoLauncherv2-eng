@@ -68,6 +68,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.composed
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.geometry.Offset
@@ -345,9 +349,27 @@ fun AppDrawer(launcher: Launcher, modifier: Modifier, onOpen: (AppInfo, Rect) ->
  * Closes a panel with a downward swipe when its list is scrolled to the top.
  * Upward swipes and swipes inside a scrolled list are left alone.
  */
-fun Modifier.swipeDownToClose(atTop: () -> Boolean, onClose: () -> Unit): Modifier =
-    pointerInput(Unit) {
-        val threshold = 64.dp.toPx()
+fun Modifier.swipeDownToClose(atTop: () -> Boolean, onClose: () -> Unit): Modifier = composed {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val threshold = with(density) { 56.dp.toPx() }
+    val close = androidx.compose.runtime.rememberUpdatedState(onClose)
+    // Lists: a downward drag the list can't use (it is already at the top) adds up until the panel closes.
+    val connection = remember {
+        object : NestedScrollConnection {
+            var pulled = 0f
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (source != NestedScrollSource.UserInput) return Offset.Zero
+                if (available.y > 0f) { pulled += available.y; if (pulled > threshold) { pulled = 0f; close.value() } }
+                else if (consumed.y < 0f || available.y < 0f) pulled = 0f
+                return Offset.Zero
+            }
+            override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
+                pulled = 0f; return androidx.compose.ui.unit.Velocity.Zero
+            }
+        }
+    }
+    nestedScroll(connection).pointerInput(Unit) {
+        // Everything else (field, empty space): a plain downward swipe.
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             if (!atTop()) return@awaitEachGesture
@@ -359,8 +381,9 @@ fun Modifier.swipeDownToClose(atTop: () -> Boolean, onClose: () -> Unit): Modifi
                 total += change.positionChange()
                 if (total.y < -12f || abs(total.x) > threshold) break
                 if (total.y > threshold && total.y > abs(total.x) * 1.3f) {
-                    change.consume(); onClose(); break
+                    change.consume(); close.value(); break
                 }
             }
         }
     }
+}

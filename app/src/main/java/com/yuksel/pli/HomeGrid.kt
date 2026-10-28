@@ -3,6 +3,7 @@ package com.yuksel.pli
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -26,6 +27,7 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -33,6 +35,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -71,6 +75,28 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
+/** Several icons picked at once (to remove them together). */
+class Selection {
+    var active by mutableStateOf(false); private set
+    val ids = mutableStateListOf<String>()
+    fun start(first: String?) { ids.clear(); first?.let(ids::add); active = true }
+    fun toggle(id: String) { if (id in ids) ids.remove(id) else ids.add(id) }
+    fun clear() { ids.clear(); active = false }
+}
+
+val LocalSelection = staticCompositionLocalOf { Selection() }
+
+/** The round check mark shown on icons in selection mode. */
+@Composable
+fun SelectMark(selected: Boolean, modifier: Modifier = Modifier) {
+    Box(modifier.size(24.dp).then(
+        if (selected) Modifier.background(Brush.linearGradient(Holo.Iridescent), CircleShape)
+        else Modifier.background(Color.Black.copy(alpha = .45f), CircleShape).border(1.5.dp, Color.White.copy(alpha = .8f), CircleShape)),
+        contentAlignment = Alignment.Center) {
+        if (selected) Icon(Icons.Rounded.Check, null, tint = Color(0xFF120A22), modifier = Modifier.size(16.dp))
+    }
+}
+
 /** A press-and-drag in progress, with what the screens registered for hit testing. */
 class DragState {
     var source by mutableStateOf<DragSource?>(null); private set
@@ -107,7 +133,10 @@ class DragState {
 
     fun clear() { source = null; active = false; spot = null }
 
+    var trashRect = Rect.Zero
+
     private fun hit(p: Offset): DropSpot? {
+        if (trashRect != Rect.Zero && trashRect.inflate(12f).contains(p)) return DropSpot.Remove
         if (dockRect.contains(p)) {
             val index = (0 until dockCount).count { i -> dockCells[i]?.let { it.center.x < p.x } == true }
             return DropSpot.Dock(screen, index)
@@ -184,7 +213,7 @@ fun HomePages(
     drag: DragState, labels: Boolean, modifier: Modifier,
     onOpenApp: (AppInfo, Rect) -> Unit, onOpenFolder: (String) -> Unit,
     onMenu: (String, Rect, DragSource) -> Unit, onCloseMenu: () -> Unit, onEmptyHold: (Int) -> Unit,
-    onEmptyDoubleTap: () -> Unit = {}, homePages: Int,
+    onEmptyDoubleTap: () -> Unit = {}, homePages: Int, topPadding: Dp = 0.dp,
     leadingPage: (@Composable (Int) -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
@@ -220,7 +249,7 @@ fun HomePages(
         if (page < pageOffset) { leadingPage?.invoke(page); return@HorizontalPager }
         val homePage = page - pageOffset
         val first = homePage * metrics.capacity
-        Column(Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
+        Column(Modifier.fillMaxSize().padding(start = 8.dp, end = 8.dp, top = topPadding)) {
             for (row in 0 until metrics.rows) {
                 Row(Modifier.fillMaxWidth().height(metrics.cellHeight)) {
                     for (col in 0 until metrics.columns) {
@@ -271,14 +300,19 @@ private fun HomeCell(
     val folder = if (HomeLayout.isFolder(id)) launcher.layout.folders[id] else null
     val app = if (folder == null) launcher.byId[id] else null
     val label = folder?.title ?: app?.label ?: ""
+    val selection = LocalSelection.current
     Column(Modifier.fillMaxSize()
         .onGloballyPositioned { bounds = it.boundsInRoot(); drag.homeCells[index] = bounds }
         .semantics { contentDescription = if (folder != null) "Dossier $label" else label }
         .clickable(interaction, null, role = Role.Button) {
-            if (folder != null) onOpenFolder(id) else app?.let { onOpenApp(it, bounds) }
+            if (selection.active) selection.toggle(id)
+            else if (folder != null) onOpenFolder(id) else app?.let { onOpenApp(it, bounds) }
         }
         .dragSource(drag, source, origin = { bounds.topLeft },
-            onHold = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onMenu(id, bounds, source) },
+            onHold = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                if (selection.active) selection.toggle(id) else onMenu(id, bounds, source)
+            },
             onDragStarted = onCloseMenu, onDrop = onDrop)
         .alpha(if (dragged) .25f else 1f)
         .drawBehind {
@@ -295,6 +329,7 @@ private fun HomeCell(
                     drawCircle(Brush.linearGradient(Holo.Iridescent), style = Stroke(2.5.dp.toPx()))
                 })
             }
+            if (selection.active) SelectMark(id in selection.ids, Modifier.align(Alignment.TopStart).offset(x = (-4).dp, y = (-4).dp))
         }
         if (labels) IconLabel(label)
     }
@@ -350,6 +385,7 @@ fun Dock(
     onSearch: (() -> Unit)?,
 ) {
     val ids = launcher.visibleDock(screen)
+    val selection = LocalSelection.current
     drag.dockCount = ids.size
     val spot = drag.spot
     val haptic = LocalHapticFeedback.current
@@ -373,16 +409,24 @@ fun Dock(
                     Box(Modifier.size(icon)
                         .onGloballyPositioned { bounds = it.boundsInRoot(); drag.dockCells[index] = bounds }
                         .semantics { contentDescription = app.label }
-                        .clickable(remember { MutableInteractionSource() }, null, role = Role.Button) { onOpenApp(app, bounds) }
+                        .clickable(remember { MutableInteractionSource() }, null, role = Role.Button) {
+                            if (selection.active) selection.toggle(id) else onOpenApp(app, bounds)
+                        }
                         .dragSource(drag, source, { bounds.topLeft },
-                            onHold = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onMenu(id, bounds, source) },
+                            onHold = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                if (selection.active) selection.toggle(id) else onMenu(id, bounds, source)
+                            },
                             onDragStarted = onCloseMenu,
                             onDrop = { drag.source?.let { s -> drag.spot?.let { sp -> applyDrop(launcher, s, sp) } } })
                         .alpha(if (dragged) .25f else 1f)
                         .drawBehind {
                             if (before) drawRoundRect(Brush.verticalGradient(Holo.Iridescent), Offset(-8.dp.toPx(), 4.dp.toPx()),
                                 Size(3.dp.toPx(), size.height - 8.dp.toPx()), CornerRadius(2.dp.toPx()))
-                        }) { AppIcon(app, icon) }
+                        }) {
+                        AppIcon(app, icon)
+                        if (selection.active) SelectMark(id in selection.ids, Modifier.align(Alignment.TopStart).offset(x = (-4).dp, y = (-4).dp))
+                    }
                 }
             }
             if (onSearch != null) SearchOrb(icon, onSearch)
