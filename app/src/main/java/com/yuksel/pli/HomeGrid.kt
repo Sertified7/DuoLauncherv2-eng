@@ -138,6 +138,8 @@ class DragState {
     fun clear() { source = null; active = false; spot = null }
 
     var trashRect = Rect.Zero
+    var splitRect = Rect.Zero
+    var onSplit: (String) -> Unit = {}
     var bigFolders: Set<String> = emptySet()
     /** True: icons can't be moved (layout locked). */
     var locked = false
@@ -147,6 +149,7 @@ class DragState {
 
     private fun hit(p: Offset): DropSpot? {
         if (trashRect != Rect.Zero && trashRect.inflate(12f).contains(p)) return DropSpot.Remove
+        if (splitRect != Rect.Zero && splitRect.inflate(12f).contains(p) && draggedId?.let { !HomeLayout.isFolder(it) } == true) return DropSpot.Split
         if (dockRect.contains(p)) {
             val index = (0 until dockCount).count { i -> dockCells[i]?.let { it.center.x < p.x } == true }
             return DropSpot.Dock(screen, index)
@@ -171,7 +174,8 @@ class DragState {
 }
 
 /** Converts a spot on the visible dock into one on the saved dock (home slots match 1:1), then applies the drop. */
-fun applyDrop(launcher: Launcher, source: DragSource, spot: DropSpot) {
+fun applyDrop(launcher: Launcher, source: DragSource, spot: DropSpot, drag: DragState? = null) {
+    if (spot == DropSpot.Split) { drag?.onSplit?.invoke(source.itemId); return }
     val layout = launcher.layout
     val mapped = if (spot is DropSpot.Dock) {
         val visible = launcher.visibleDock(spot.screen)
@@ -295,10 +299,10 @@ fun HomePages(
                                 }
                             }
                             folder != null -> BigFolder(folder, index, screen, launcher, metrics.icon, drag, onOpenApp, onOpenFolder, onMenu, onCloseMenu,
-                                onDrop = { drag.source?.let { s -> drag.spot?.let { sp -> applyDrop(launcher, s, sp) } } })
+                                onDrop = { drag.source?.let { s -> drag.spot?.let { sp -> applyDrop(launcher, s, sp, drag) } } })
                             else -> HomeCell(id, index, screen, launcher, metrics.icon, labels, drag,
                                 onOpenApp, onOpenFolder, onMenu, onCloseMenu,
-                                onDrop = { drag.source?.let { s -> drag.spot?.let { sp -> applyDrop(launcher, s, sp) } } })
+                                onDrop = { drag.source?.let { s -> drag.spot?.let { sp -> applyDrop(launcher, s, sp, drag) } } })
                         }
                     }
                 }
@@ -506,7 +510,7 @@ fun Dock(
                                 if (selection.active) selection.toggle(id) else onMenu(id, bounds, source)
                             },
                             onDragStarted = onCloseMenu,
-                            onDrop = { drag.source?.let { s -> drag.spot?.let { sp -> applyDrop(launcher, s, sp) } } })
+                            onDrop = { drag.source?.let { s -> drag.spot?.let { sp -> applyDrop(launcher, s, sp, drag) } } })
                         .alpha(if (dragged) .25f else 1f)
                         .drawBehind {
                             if (before) drawRoundRect(Brush.verticalGradient(Holo.Iridescent), Offset(-8.dp.toPx(), 4.dp.toPx()),

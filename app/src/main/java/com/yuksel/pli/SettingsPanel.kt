@@ -30,6 +30,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Backup
 import androidx.compose.material.icons.rounded.Tune
@@ -124,7 +125,7 @@ private fun ChoiceRow(title: String, detail: String?, options: List<Int>, select
 }
 
 private enum class SettingsCategory(val label: String, val icon: ImageVector, val subs: List<Pair<String, ImageVector>>) {
-    THEMES("Thèmes", Icons.Rounded.Palette, listOf("Fond" to Icons.Rounded.Wallpaper, "Icônes" to Icons.Rounded.Category, "Forme" to Icons.Rounded.Interests)),
+    THEMES("Thèmes", Icons.Rounded.Palette, listOf("Fond" to Icons.Rounded.Wallpaper, "Icônes" to Icons.Rounded.Category, "Forme" to Icons.Rounded.Interests, "Animations" to Icons.Rounded.AutoAwesome)),
     HOME("Accueil", Icons.Rounded.PhoneAndroid, listOf("Grille" to Icons.Rounded.GridView, "Dock" to Icons.Rounded.Dock,
         "Horloge" to Icons.Rounded.Schedule, "Pages" to Icons.Rounded.ViewCarousel)),
     APPS("Applis", Icons.Rounded.Apps, listOf("Masquées" to Icons.Rounded.VisibilityOff, "Ajout" to Icons.Rounded.AddToHomeScreen)),
@@ -309,6 +310,14 @@ private fun SettingsOptions(
                 }
             }
         }
+        SettingsCategory.THEMES to "Animations" -> Section("Ouverture des applis") {
+            val choices = listOf("holo" to "Holographique", "system" to "Système")
+            Text("Holographique : un anneau irisé jaillit de l’icône et l’appli grandit depuis sa bulle.", color = Holo.Muted, fontSize = 12.sp,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                choices.forEach { (key, name) -> PillButton(name, highlighted = s.launchAnimation == key) { launcher.updateSettings { it.copy(launchAnimation = key) } } }
+            }
+        }
         SettingsCategory.HOME to "Grille" -> {
             Section("Écran externe") {
                 ChoiceRow("Colonnes", null, listOf(0, 3, 4, 5, 6), s.coverColumns) { v -> launcher.updateSettings { it.copy(coverColumns = v) } }
@@ -372,6 +381,7 @@ private fun SettingsOptions(
         SettingsCategory.GENERAL to "Général" -> Section("Pli") {
             if (!isDefaultHome) ActionRow("Faire de Pli l’appli d’accueil", "Pour le bouton Accueil, les raccourcis et les deux écrans", "Choisir", onMakeDefault)
             else Text("Pli est ton appli d’accueil.", color = Holo.Soft, fontSize = 14.sp, modifier = Modifier.padding(16.dp))
+            ToggleRow("Vibrations", "Petit retour haptique sur les appuis longs et les déplacements", s.haptics) { v -> launcher.updateSettings { it.copy(haptics = v) } }
             Text("Pli · launcher holographique pour Galaxy Z Fold", color = Holo.Muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         }
         SettingsCategory.GENERAL to "Sauvegarde" -> Section("Sauvegarde") {

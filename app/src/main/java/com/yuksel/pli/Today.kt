@@ -84,10 +84,12 @@ class TodayState {
     var gadgets by mutableStateOf<List<Gadget>>(emptyList())
     var calendarAllowed by mutableStateOf(false)
     var notificationsAllowed by mutableStateOf(false)
+    var refreshCount by mutableStateOf(0)
     private var weatherAt = 0L
     private var weatherKey = ""
 
     suspend fun refresh(context: Context, settings: PliSettings, force: Boolean = false) {
+        refreshCount++
         battery = readBattery(context)
         gadgets = readGadgets(context)
         calendarAllowed = hasCalendarAccess(context)
@@ -161,6 +163,8 @@ fun TodayColumn(
                     TodayItem.BATTERY -> BatteryCard(today, onPermission)
                     TodayItem.NOTE -> NoteCard(launcher)
                     TodayItem.TOGGLES -> TogglesCard(onPermission)
+                    TodayItem.TASKS -> TasksCard()
+                    TodayItem.SCREEN_TIME -> ScreenTimeCard(launcher, today.refreshCount)
                     TodayItem.KIND_ANDROID -> AndroidWidgetCard(widgets, item)
                 }
             }
@@ -186,6 +190,8 @@ fun cardTitle(item: TodayItem, widgets: Widgets): String = when (item.kind) {
     TodayItem.BATTERY -> "Batterie"
     TodayItem.NOTE -> "Note rapide"
     TodayItem.TOGGLES -> "Raccourcis"
+    TodayItem.TASKS -> "Rappels"
+    TodayItem.SCREEN_TIME -> "Temps d’écran"
     else -> widgets.info(item.widgetId)?.let(widgets::label) ?: "Widget"
 }
 

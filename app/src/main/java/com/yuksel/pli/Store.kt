@@ -30,6 +30,9 @@ data class PliSettings(
     val iconShape: String = "circle",
     /** Right of the clock: "google", "finder", "pli" or "none". */
     val headerSearch: String = "google",
+    /** "holo": iridescent burst + app growing from its icon; "system": Android's default. */
+    val launchAnimation: String = "holo",
+    val haptics: Boolean = true,
 )
 
 /** Saves the layout, the settings and the quick note in private preferences. */
@@ -69,6 +72,8 @@ class Store(context: Context) {
         recentInDock = prefs.getInt("recentInDock", 2),
         iconShape = prefs.getString("iconShape", "circle") ?: "circle",
         headerSearch = prefs.getString("headerSearch", "google") ?: "google",
+        launchAnimation = prefs.getString("launchAnimation", "holo") ?: "holo",
+        haptics = prefs.getBoolean("haptics", true),
     )
 
     fun saveSettings(s: PliSettings) {
@@ -82,7 +87,8 @@ class Store(context: Context) {
             .putString("iconPack", s.iconPack).putBoolean("tintedIcons", s.tintedIcons).putString("doubleTap", s.doubleTap)
             .putString("twoFingerUp", s.twoFingerUp).putString("twoFingerDown", s.twoFingerDown)
             .putBoolean("lockLayout", s.lockLayout).putInt("recentInDock", s.recentInDock)
-            .putString("iconShape", s.iconShape).putString("headerSearch", s.headerSearch).apply()
+            .putString("iconShape", s.iconShape).putString("headerSearch", s.headerSearch)
+            .putString("launchAnimation", s.launchAnimation).putBoolean("haptics", s.haptics).apply()
     }
 
     /** Everything Pli saved (layout, settings, note) as one JSON document. Android widgets are left out: they belong to this phone. */

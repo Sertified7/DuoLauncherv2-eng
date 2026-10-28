@@ -53,6 +53,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material.icons.rounded.VerticalSplit
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
@@ -95,6 +97,8 @@ interface PliHost {
     fun authenticate(title: String, onSuccess: () -> Unit)
     /** Lets the user pick a picture; [onPicked] gets its address. */
     fun pickImage(onPicked: (android.net.Uri) -> Unit)
+    /** Opens [first] (if any), then [second] next to it in split screen. */
+    fun launchSplit(first: AppInfo?, second: AppInfo)
 }
 
 /** Counters the activity bumps so the UI can react. */
@@ -181,8 +185,10 @@ fun PliApp(host: PliHost, signals: HostSignals) {
         }
     }
 
+    var burst by remember { mutableStateOf<Pair<Rect, Long>?>(null) }
     val open: (AppInfo, Rect?) -> Unit = { app, bounds ->
         val go = {
+            if (launcher.settings.launchAnimation == "holo" && bounds != null && bounds != Rect.Zero) burst = bounds to System.nanoTime()
             launcher.recordLaunch(app, screen)
             host.launch(app, bounds?.takeIf { it != Rect.Zero })
             if (panel == Panel.SEARCH || panel == Panel.DRAWER) panel = Panel.NONE
@@ -193,6 +199,10 @@ fun PliApp(host: PliHost, signals: HostSignals) {
     var renameApp by remember { mutableStateOf<AppInfo?>(null) }
     var iconApp by remember { mutableStateOf<AppInfo?>(null) }
     drag.locked = launcher.settings.lockLayout
+    // Dropping an app on "Écran partagé" (inner screen) opens it next to the last app used.
+    drag.onSplit = { id ->
+        launcher.byId[id]?.let { app -> host.launchSplit(splitPartner(launcher, context, id), app) }
+    }
     // Swipe up on an app icon opens its favourite shortcut.
     drag.onIconSwipeUp = { id ->
         launcher.byId[id]?.let { app ->
@@ -229,7 +239,8 @@ fun PliApp(host: PliHost, signals: HostSignals) {
 
     BackHandler(selection.active) { selection.clear() }
     LaunchedEffect(launcher.settings.lockLayout) { if (launcher.settings.lockLayout) selection.clear() }
-    CompositionLocalProvider(LocalBubbles provides launcher.settings.bubbles, LocalIconShape provides launcher.settings.iconShape, LocalBadges provides badges, LocalSelection provides selection) {
+    CompositionLocalProvider(LocalBubbles provides launcher.settings.bubbles, LocalIconShape provides launcher.settings.iconShape, LocalBadges provides badges, LocalSelection provides selection,
+        androidx.compose.ui.platform.LocalHapticFeedback provides if (launcher.settings.haptics) androidx.compose.ui.platform.LocalHapticFeedback.current else NoHaptics) {
         Box(Modifier.fillMaxSize()) {
             HoloBackground(launcher.settings.phoneWallpaper, launcher.settings.parallax)
             // Home ignores the keyboard so the grid never changes size while typing.
@@ -242,13 +253,33 @@ fun PliApp(host: PliHost, signals: HostSignals) {
                 else key("cover", launcher.settings.discover) { CoverHome(host, signals, today, drag, actions, swipesOn, showToday) }
             }
             // Bin at the top while dragging: a full-width bar over the clock, drop an icon on it to take it off the home screen.
-            if (drag.active) TopBar(Modifier.onGloballyPositioned { drag.trashRect = it.boundsInRoot() },
-                highlight = drag.spot == DropSpot.Remove) {
+            if (drag.active) TopBar(Modifier, highlight = false) {
                 val over = drag.spot == DropSpot.Remove
-                Icon(Icons.Rounded.Delete, null, tint = if (over) Holo.Badge else Holo.Ink)
-                Text("Retirer de l’accueil", color = if (over) Holo.Badge else Holo.Ink, fontSize = 15.sp, modifier = Modifier.padding(start = 10.dp))
-            } else SideEffect { drag.trashRect = Rect.Zero }
+                val splitOn = screen == Screen.INNER && drag.draggedId?.let { !HomeLayout.isFolder(it) } == true
+                Row(Modifier.fillMaxWidth().fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.weight(1f).fillMaxHeight().onGloballyPositioned { drag.trashRect = it.boundsInRoot() }
+                        .background(if (over) Holo.Badge.copy(alpha = .2f) else Color.Transparent),
+                        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Delete, null, tint = if (over) Holo.Badge else Holo.Ink)
+                        Text("Retirer de l’accueil", color = if (over) Holo.Badge else Holo.Ink, fontSize = 15.sp, modifier = Modifier.padding(start = 10.dp))
+                    }
+                    if (splitOn) {
+                        val overSplit = drag.spot == DropSpot.Split
+                        val partner = splitPartner(launcher, context, drag.draggedId)
+                        Box(Modifier.width(1.dp).fillMaxHeight(.6f).background(Color.White.copy(alpha = .2f)))
+                        Row(Modifier.weight(1f).fillMaxHeight().onGloballyPositioned { drag.splitRect = it.boundsInRoot() }
+                            .background(if (overSplit) Holo.Violet.copy(alpha = .2f) else Color.Transparent),
+                            horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.VerticalSplit, null, tint = if (overSplit) Holo.Violet else Holo.Ink)
+                            Text(if (partner != null) "Écran partagé avec ${partner.label}" else "Ouvrir en écran partagé",
+                                color = if (overSplit) Holo.Violet else Holo.Ink, fontSize = 15.sp, maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(start = 10.dp))
+                        }
+                    } else SideEffect { drag.splitRect = Rect.Zero }
+                }
+            } else SideEffect { drag.trashRect = Rect.Zero; drag.splitRect = Rect.Zero }
             DragGhost(launcher, drag, if (screen == Screen.INNER) 62.dp else 60.dp)
+            burst?.let { (rect, stamp) -> key(stamp) { LaunchBurst(rect) { burst = null } } }
             // Selection mode: pick several icons, then remove them together.
             if (selection.active) TopBar(Modifier, highlight = false) {
                 val n = selection.ids.size
@@ -527,4 +558,34 @@ private fun TopBar(modifier: Modifier, highlight: Boolean, content: @Composable 
         Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(1.dp)
             .background(Brush.horizontalGradient(Holo.Iridescent.map { it.copy(alpha = .5f) })))
     }
+}
+
+/** The app to share the screen with: the last one opened from Pli (or the most recent), other than [exclude]. */
+fun splitPartner(launcher: Launcher, context: android.content.Context, exclude: String?): AppInfo? =
+    launcher.lastLaunch?.first?.takeIf { it != exclude }?.let { launcher.byId[it] }
+        ?: UsageLog.recent(context, launcher.byId, 1, setOfNotNull(exclude)).firstOrNull()
+
+/** The iridescent ring that bursts out of an icon when its app opens. */
+@Composable
+private fun LaunchBurst(rect: Rect, onEnd: () -> Unit) {
+    val progress = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(Unit) {
+        progress.animateTo(1f, androidx.compose.animation.core.tween(420, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+        onEnd()
+    }
+    androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+        val p = progress.value
+        val start = rect.minDimension / 2f
+        val radius = start + (size.maxDimension * .45f) * p
+        val alpha = (1f - p).coerceIn(0f, 1f)
+        drawCircle(Brush.radialGradient(listOf(Holo.Violet.copy(alpha = .35f * alpha), Color.Transparent), rect.center, radius * 1.2f),
+            radius * 1.2f, rect.center)
+        drawCircle(Brush.sweepGradient(listOf(Holo.Cyan, Holo.Violet, Holo.Pink, Holo.Cyan), rect.center),
+            radius, rect.center, alpha = alpha, style = androidx.compose.ui.graphics.drawscope.Stroke((6f + 18f * (1f - p))))
+    }
+}
+
+/** Used when vibrations are turned off. */
+private object NoHaptics : androidx.compose.ui.hapticfeedback.HapticFeedback {
+    override fun performHapticFeedback(hapticFeedbackType: androidx.compose.ui.hapticfeedback.HapticFeedbackType) {}
 }

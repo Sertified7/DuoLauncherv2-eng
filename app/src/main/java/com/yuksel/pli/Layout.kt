@@ -23,7 +23,9 @@ data class TodayItem(val key: String, val kind: String, val widgetId: Int = -1, 
         const val NOTE = "note"
         const val MEDIA = "media"
         const val TOGGLES = "toggles"
-        val BUILT_IN = listOf(WEATHER, AGENDA, MEDIA, BATTERY, NOTE, TOGGLES)
+        const val TASKS = "tasks"
+        const val SCREEN_TIME = "screentime"
+        val BUILT_IN = listOf(WEATHER, AGENDA, MEDIA, BATTERY, NOTE, TOGGLES, TASKS, SCREEN_TIME)
     }
 }
 
@@ -138,6 +140,8 @@ sealed interface DropSpot {
     data class Dock(val screen: Screen, val index: Int) : DropSpot
     /** On the bin: taken off the home screen or dock (the app stays in the app list). */
     data object Remove : DropSpot
+    /** On the inner screen's "Écran partagé" zone: opens the app next to the last one (no layout change). */
+    data object Split : DropSpot
 }
 
 /** Where a dragged item came from. */
@@ -291,6 +295,7 @@ object LayoutEdits {
             is DragSource.InFolder -> takeOutOfFolder(layout, source.folderId, id)
         }
         when (spot) {
+            DropSpot.Split -> return layout
             DropSpot.Remove -> return if (HomeLayout.isFolder(id)) base.copy(folders = base.folders - id) else base
             is DropSpot.Home -> {
                 // Keep untrimmed slots while placing (the source slot may be just before the target).

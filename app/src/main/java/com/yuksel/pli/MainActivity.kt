@@ -108,8 +108,10 @@ class MainActivity : ComponentActivity(), PliHost {
     override fun launch(app: AppInfo, bounds: Rect?) {
         val view = window.decorView
         val androidBounds = bounds?.let { AndroidRect(it.left.roundToInt(), it.top.roundToInt(), it.right.roundToInt(), it.bottom.roundToInt()) }
+        // Holographic style: the app grows out of its bubble; system style: Android's reveal.
         val options = androidBounds?.let {
-            ActivityOptions.makeClipRevealAnimation(view, it.left, it.top, it.width(), it.height()).toBundle()
+            if (launcher.settings.launchAnimation == "holo") ActivityOptions.makeScaleUpAnimation(view, it.left, it.top, it.width(), it.height()).toBundle()
+            else ActivityOptions.makeClipRevealAnimation(view, it.left, it.top, it.width(), it.height()).toBundle()
         }
         if (!launcher.repository.launch(app, androidBounds, options)) launcher.repository.launch(app, androidBounds, null)
     }
@@ -168,6 +170,19 @@ class MainActivity : ComponentActivity(), PliHost {
 
     override fun importBackup() {
         importFile.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
+    }
+
+    override fun launchSplit(first: AppInfo?, second: AppInfo) {
+        if (first != null) launch(first, null)
+        window.decorView.postDelayed({
+            val ok = runCatching {
+                if (second.user == android.os.Process.myUserHandle()) {
+                    startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setComponent(second.component)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT or Intent.FLAG_ACTIVITY_MULTIPLE_TASK))
+                } else launch(second, null)
+            }.isSuccess
+            if (!ok) toast("${second.label} ne peut pas s’ouvrir en écran partagé")
+        }, if (first != null) 450L else 0L)
     }
 
     override fun pickImage(onPicked: (android.net.Uri) -> Unit) {
