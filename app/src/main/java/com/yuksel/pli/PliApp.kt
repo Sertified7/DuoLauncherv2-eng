@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -221,38 +222,29 @@ fun PliApp(host: PliHost, signals: HostSignals) {
                 if (wide) key("inner", launcher.settings.discover) { InnerHome(host, signals, today, drag, actions, swipesOn, showToday) }
                 else key("cover", launcher.settings.discover) { CoverHome(host, signals, today, drag, actions, swipesOn, showToday) }
             }
-            // Bin at the top while dragging: drop an icon on it to take it off the home screen.
-            if (drag.active) Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars).padding(top = 10.dp),
-                contentAlignment = Alignment.TopCenter) {
+            // Bin at the top while dragging: a full-width bar over the clock, drop an icon on it to take it off the home screen.
+            if (drag.active) TopBar(Modifier.onGloballyPositioned { drag.trashRect = it.boundsInRoot() },
+                highlight = drag.spot == DropSpot.Remove) {
                 val over = drag.spot == DropSpot.Remove
-                Row(Modifier.onGloballyPositioned { drag.trashRect = it.boundsInRoot() }
-                    .halo(Holo.Badge.copy(alpha = if (over) .45f else .15f), 16.dp)
-                    .glass(RoundedCornerShape(50), if (over) .2f else .1f)
-                    .padding(horizontal = 22.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.Delete, null, tint = if (over) Holo.Badge else Holo.Ink)
-                    Text("Retirer de l’accueil", color = if (over) Holo.Badge else Holo.Ink, fontSize = 14.sp, modifier = Modifier.padding(start = 10.dp))
-                }
+                Icon(Icons.Rounded.Delete, null, tint = if (over) Holo.Badge else Holo.Ink)
+                Text("Retirer de l’accueil", color = if (over) Holo.Badge else Holo.Ink, fontSize = 15.sp, modifier = Modifier.padding(start = 10.dp))
             } else SideEffect { drag.trashRect = Rect.Zero }
             DragGhost(launcher, drag, if (screen == Screen.INNER) 62.dp else 60.dp)
             // Selection mode: pick several icons, then remove them together.
-            if (selection.active) Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars).padding(top = 10.dp),
-                contentAlignment = Alignment.TopCenter) {
-                Row(Modifier.halo(Holo.Violet.copy(alpha = .2f), 14.dp).glass(RoundedCornerShape(50), .14f)
-                    .padding(start = 18.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    val n = selection.ids.size
-                    Text(if (n == 0) "Touche les applis à retirer" else "$n sélectionnée" + if (n > 1) "s" else "",
-                        color = Holo.Ink, fontSize = 14.sp, modifier = Modifier.padding(end = 12.dp))
-                    if (n > 0) Row(Modifier.clip(RoundedCornerShape(50)).background(Holo.Badge.copy(alpha = .85f))
-                        .clickable {
-                            val ids = selection.ids.toSet()
-                            launcher.update { LayoutEdits.removeMany(it, screen, ids) }
-                            selection.clear()
-                        }.padding(horizontal = 14.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Rounded.Delete, null, tint = Color(0xFF1A0512), modifier = Modifier.size(18.dp))
-                        Text("Retirer", color = Color(0xFF1A0512), fontSize = 14.sp, modifier = Modifier.padding(start = 6.dp))
-                    }
-                    PillButton("Terminé", onClick = selection::clear)
+            if (selection.active) TopBar(Modifier, highlight = false) {
+                val n = selection.ids.size
+                Text(if (n == 0) "Touche les applis à retirer" else "$n sélectionnée" + if (n > 1) "s" else "",
+                    color = Holo.Ink, fontSize = 15.sp, modifier = Modifier.padding(end = 16.dp))
+                if (n > 0) Row(Modifier.padding(end = 10.dp).clip(RoundedCornerShape(50)).background(Holo.Badge.copy(alpha = .9f))
+                    .clickable {
+                        val ids = selection.ids.toSet()
+                        launcher.update { LayoutEdits.removeMany(it, screen, ids) }
+                        selection.clear()
+                    }.padding(horizontal = 16.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Delete, null, tint = Color(0xFF1A0512), modifier = Modifier.size(18.dp))
+                    Text("Retirer", color = Color(0xFF1A0512), fontSize = 14.sp, modifier = Modifier.padding(start = 6.dp))
                 }
+                PillButton("Terminé", onClick = selection::clear)
             }
 
             FullPanel(article != null) { m -> article?.let { ArticleReader(it, m) { article = null } } }
@@ -462,5 +454,18 @@ private fun InnerHome(host: PliHost, signals: HostSignals, today: TodayState, dr
             Modifier.align(Alignment.CenterHorizontally).widthIn(max = (dockCount * 78 + 40).dp).fillMaxWidth()
                 .padding(start = 18.dp, end = 18.dp, bottom = 12.dp, top = 6.dp),
             onOpenApp = { a, r -> actions.open(a, r) }, onMenu = actions.menu, onCloseMenu = actions.closeMenu, onSearch = null)
+    }
+}
+
+/** A full-width bar across the top of the screen (status bar included), over the clock. */
+@Composable
+private fun TopBar(modifier: Modifier, highlight: Boolean, content: @Composable () -> Unit) {
+    Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Holo.Panel, Holo.Panel.copy(alpha = .94f))))
+        .then(if (highlight) Modifier.background(Holo.Badge.copy(alpha = .18f)) else Modifier)
+        .windowInsetsPadding(WindowInsets.systemBars.only(androidx.compose.foundation.layout.WindowInsetsSides.Top))
+        .then(modifier).height(76.dp), contentAlignment = Alignment.Center) {
+        Row(verticalAlignment = Alignment.CenterVertically) { content() }
+        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(1.dp)
+            .background(Brush.horizontalGradient(Holo.Iridescent.map { it.copy(alpha = .5f) })))
     }
 }
