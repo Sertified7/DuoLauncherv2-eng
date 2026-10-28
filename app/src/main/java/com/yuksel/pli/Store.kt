@@ -33,6 +33,9 @@ data class PliSettings(
     /** "holo": iridescent burst + app growing from its icon; "system": Android's default. */
     val launchAnimation: String = "holo",
     val haptics: Boolean = true,
+    /** Below 20 % (not charging): no moving halos, no launch effect. */
+    val batterySaver: Boolean = true,
+    val onboarded: Boolean = false,
 )
 
 /** Saves the layout, the settings and the quick note in private preferences. */
@@ -74,6 +77,8 @@ class Store(context: Context) {
         headerSearch = prefs.getString("headerSearch", "google") ?: "google",
         launchAnimation = prefs.getString("launchAnimation", "holo") ?: "holo",
         haptics = prefs.getBoolean("haptics", true),
+        batterySaver = prefs.getBoolean("batterySaver", true),
+        onboarded = prefs.getBoolean("onboarded", false),
     )
 
     fun saveSettings(s: PliSettings) {
@@ -88,7 +93,8 @@ class Store(context: Context) {
             .putString("twoFingerUp", s.twoFingerUp).putString("twoFingerDown", s.twoFingerDown)
             .putBoolean("lockLayout", s.lockLayout).putInt("recentInDock", s.recentInDock)
             .putString("iconShape", s.iconShape).putString("headerSearch", s.headerSearch)
-            .putString("launchAnimation", s.launchAnimation).putBoolean("haptics", s.haptics).apply()
+            .putString("launchAnimation", s.launchAnimation).putBoolean("haptics", s.haptics)
+            .putBoolean("batterySaver", s.batterySaver).putBoolean("onboarded", s.onboarded).apply()
     }
 
     /** Everything Pli saved (layout, settings, note) as one JSON document. Android widgets are left out: they belong to this phone. */

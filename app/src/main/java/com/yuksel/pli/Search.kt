@@ -254,7 +254,12 @@ fun SearchPanel(launcher: Launcher, modifier: Modifier, onOpen: (AppInfo, Rect?)
     val keyboard = LocalSoftwareKeyboardController.current
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() }; keyboard?.show() }
     val apps = launcher.visibleApps
-    val matches = remember(query, apps) { matchApps(apps, query).take(8) }
+    // Apps you usually pick for what you type come first.
+    val matches = remember(query, apps) { SearchLearning.rank(context, query, matchApps(apps, query)).take(8) }
+    fun openFromSearch(app: AppInfo, bounds: Rect?) {
+        if (query.isNotBlank()) SearchLearning.record(context, query, app.id)
+        onOpen(app, bounds)
+    }
     val suggestions = remember(apps) { UsageLog.suggestions(context, launcher.byId, 8).ifEmpty { launcher.visibleDock(Screen.COVER).mapNotNull(launcher.byId::get) } }
     val calc = remember(query) { evaluateCalculation(query) }
     val contactsAllowed = context.checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
@@ -271,7 +276,7 @@ fun SearchPanel(launcher: Launcher, modifier: Modifier, onOpen: (AppInfo, Rect?)
     val noteHit = q.length >= 2 && note.normalizedForSearch().contains(q)
     fun launchFirst() {
         val first = matches.firstOrNull()
-        if (first != null) onOpen(first, null) else if (query.isNotBlank()) { webSearch(context, query); onClose() }
+        if (first != null) openFromSearch(first, null) else if (query.isNotBlank()) { webSearch(context, query); onClose() }
     }
     val list = rememberLazyListState()
     Column(modifier.swipeDownToClose({ list.firstVisibleItemIndex == 0 && list.firstVisibleItemScrollOffset == 0 }) { keyboard?.hide(); onClose() }) {
@@ -302,7 +307,7 @@ fun SearchPanel(launcher: Launcher, modifier: Modifier, onOpen: (AppInfo, Rect?)
                     SectionLabel(if (query.isBlank()) "Suggestions" else "Applis")
                     shown.chunked(4).forEach { row ->
                         Row(Modifier.fillMaxWidth()) {
-                            row.forEach { app -> Box(Modifier.weight(1f)) { AppChoice(app, 56.dp, { a, r -> onOpen(a, r) }, onHold) } }
+                            row.forEach { app -> Box(Modifier.weight(1f)) { AppChoice(app, 56.dp, { a, r -> openFromSearch(a, r) }, onHold) } }
                             repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
                         }
                     }
@@ -513,3 +518,32 @@ fun loadAllShortcuts(context: android.content.Context, apps: List<AppInfo>): Lis
         }
     }
 }.getOrDefault(emptyList())
+
+/** Remembers which app you open for what you type ("wh" → WhatsApp), on this phone only. */
+object SearchLearning {
+    private fun prefs(context: android.content.Context) = context.getSharedPreferences("search", android.content.Context.MODE_PRIVATE)
+
+    fun record(context: android.content.Context, query: String, appId: String) {
+        val q = query.trim().normalizedForSearch().take(8)
+        if (q.isEmpty()) return
+        val all = runCatching { org.json.JSONObject(prefs(context).getString("learn", "{}")!!) }.getOrDefault(org.json.JSONObject())
+        val entry = all.optJSONObject(q) ?: org.json.JSONObject()
+        entry.put(appId, entry.optInt(appId) + 1)
+        all.put(q, entry)
+        prefs(context).edit().putString("learn", all.toString()).apply()
+    }
+
+    /** Sorts [matches] by how often each was chosen for this query or a shorter beginning of it. */
+    fun rank(context: android.content.Context, query: String, matches: List<AppInfo>): List<AppInfo> {
+        val q = query.trim().normalizedForSearch().take(8)
+        if (q.isEmpty() || matches.size < 2) return matches
+        val all = runCatching { org.json.JSONObject(prefs(context).getString("learn", "{}")!!) }.getOrNull() ?: return matches
+        val score = HashMap<String, Double>()
+        for (len in 1..q.length) {
+            val entry = all.optJSONObject(q.take(len)) ?: continue
+            entry.keys().forEach { id -> score[id] = (score[id] ?: 0.0) + entry.optInt(id) * len }
+        }
+        if (score.isEmpty()) return matches
+        return matches.sortedByDescending { score[it.id] ?: 0.0 }
+    }
+}

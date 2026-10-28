@@ -12,7 +12,8 @@ data class Folder(val id: String, val title: String, val apps: List<String>, val
 }
 
 /** A card in the "Aujourd'hui" column: a built-in widget or an Android widget. */
-data class TodayItem(val key: String, val kind: String, val widgetId: Int = -1, val height: Int = 0) {
+/** [stack]: cards sharing the same non-empty stack sit on top of each other and are swiped through. */
+data class TodayItem(val key: String, val kind: String, val widgetId: Int = -1, val height: Int = 0, val stack: String = "") {
     val isAndroid get() = kind == KIND_ANDROID
 
     companion object {
@@ -89,7 +90,7 @@ data class HomeLayout(
             folders.values.forEach { put(JSONObject().put("id", it.id).put("title", it.title).put("apps", JSONArray(it.apps)).put("w", it.w).put("h", it.h)) }
         })
         put("today", JSONArray().apply {
-            today.forEach { put(JSONObject().put("key", it.key).put("kind", it.kind).put("widgetId", it.widgetId).put("height", it.height)) }
+            today.forEach { put(JSONObject().put("key", it.key).put("kind", it.kind).put("widgetId", it.widgetId).put("height", it.height).put("stack", it.stack)) }
         })
         put("hidden", JSONArray(hidden.toList()))
         put("labels", JSONObject(labels as Map<*, *>)); put("icons", JSONObject(icons as Map<*, *>))
@@ -116,7 +117,7 @@ data class HomeLayout(
             } ?: emptyMap()
             val today = json.optJSONArray("today")?.let { a ->
                 (0 until a.length()).mapNotNull { i -> a.optJSONObject(i) }.map { o ->
-                    TodayItem(o.optString("key"), o.optString("kind"), o.optInt("widgetId", -1), o.optInt("height", 0))
+                    TodayItem(o.optString("key"), o.optString("kind"), o.optInt("widgetId", -1), o.optInt("height", 0), o.optString("stack", ""))
                 }
             } ?: HomeLayout().today
             fun map(name: String): Map<String, String> = json.optJSONObject(name)?.let { o ->

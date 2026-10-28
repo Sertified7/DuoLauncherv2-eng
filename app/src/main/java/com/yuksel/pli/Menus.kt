@@ -42,6 +42,7 @@ import androidx.compose.material.icons.rounded.Widgets
 import androidx.compose.material.icons.rounded.Dock
 import androidx.compose.material.icons.rounded.CallSplit
 import androidx.compose.material.icons.rounded.Checklist
+import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Fingerprint
@@ -257,6 +258,16 @@ fun AppMenu(request: MenuRequest, launcher: Launcher, currentScreen: Screen, onD
                     launcher.update { l -> l.copy(protectedApps = if (isProtected) l.protectedApps - app.id else l.protectedApps + app.id) }
                     onDismiss()
                 }
+                val storage by produceState<String?>(null, app.id) { value = withContext(Dispatchers.IO) { appStorage(context, app) } }
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(16.dp)).clickable { onInfo(app); onDismiss() }
+                    .padding(horizontal = 14.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Stockage et cache", color = Holo.Ink, fontSize = 15.sp)
+                        Text(storage ?: if (hasUsageAccess(context)) "Calcul…" else "Taille visible avec l’accès à l’utilisation",
+                            color = Holo.Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Icon(Icons.Rounded.Storage, null, tint = Holo.Ink.copy(alpha = .85f), modifier = Modifier.size(20.dp))
+                }
                 MenuRow(Icons.Rounded.Info, "Infos sur l’appli") { onInfo(app); onDismiss() }
                 if (!locked) MenuRow(Icons.Rounded.VisibilityOff, "Masquer l’appli") { launcher.hide(app); onDismiss() }
                 MenuRow(Icons.Rounded.Delete, "Désinstaller", Holo.Pink) { onUninstall(app); onDismiss() }
@@ -347,3 +358,12 @@ fun Modifier.combinedClick(onClick: () -> Unit, onLongClick: () -> Unit): Modifi
 /** Folder sizes on the home page: columns × rows (0 columns = the whole width). */
 private val FOLDER_SIZES = listOf(Triple(1, 1, "Icône"), Triple(2, 1, "2×1"), Triple(2, 2, "2×2"), Triple(3, 2, "3×2"),
     Triple(0, 1, "Largeur ×1"), Triple(0, 2, "Largeur ×2"), Triple(0, 3, "Largeur ×3"), Triple(0, 4, "Largeur ×4"))
+
+/** "Appli 120 Mo · données 40 Mo · cache 12 Mo" (needs usage access). Clearing the cache is done in the system page. */
+fun appStorage(context: android.content.Context, app: AppInfo): String? = runCatching {
+    if (!hasUsageAccess(context)) return null
+    val manager = context.getSystemService(android.app.usage.StorageStatsManager::class.java)
+    val stats = manager.queryStatsForPackage(android.os.storage.StorageManager.UUID_DEFAULT, app.packageName, app.user)
+    fun mb(bytes: Long) = if (bytes >= 1_000_000_000) "%.1f Go".format(java.util.Locale.FRANCE, bytes / 1e9) else "${bytes / 1_000_000} Mo"
+    "Appli ${mb(stats.appBytes)} · données ${mb(stats.dataBytes - stats.cacheBytes)} · cache ${mb(stats.cacheBytes)}"
+}.getOrNull()

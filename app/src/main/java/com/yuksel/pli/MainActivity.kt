@@ -110,7 +110,7 @@ class MainActivity : ComponentActivity(), PliHost {
         val androidBounds = bounds?.let { AndroidRect(it.left.roundToInt(), it.top.roundToInt(), it.right.roundToInt(), it.bottom.roundToInt()) }
         // Holographic style: the app grows out of its bubble; system style: Android's reveal.
         val options = androidBounds?.let {
-            if (launcher.settings.launchAnimation == "holo") ActivityOptions.makeScaleUpAnimation(view, it.left, it.top, it.width(), it.height()).toBundle()
+            if (launcher.settings.launchAnimation == "holo" && !launcher.lowPower) ActivityOptions.makeScaleUpAnimation(view, it.left, it.top, it.width(), it.height()).toBundle()
             else ActivityOptions.makeClipRevealAnimation(view, it.left, it.top, it.width(), it.height()).toBundle()
         }
         if (!launcher.repository.launch(app, androidBounds, options)) launcher.repository.launch(app, androidBounds, null)

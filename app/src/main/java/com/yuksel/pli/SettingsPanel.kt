@@ -197,6 +197,7 @@ fun SettingsPanel(
     onClose: () -> Unit, onMakeDefault: () -> Unit, onNotificationAccess: () -> Unit, onLocation: () -> Unit,
     onWeatherChanged: () -> Unit,
     onExport: () -> Unit = {}, onImport: () -> Unit = {}, accessibilityOn: Boolean = false, onAccessibility: () -> Unit = {},
+    onGuide: () -> Unit = {}, onOnboarding: () -> Unit = {},
 ) {
     var picking by remember { mutableStateOf<String?>(null) }
     picking?.let { which ->
@@ -220,7 +221,8 @@ fun SettingsPanel(
             Spacer(Modifier.height(10.dp))
             Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 SettingsOptions(category, sub, launcher, isDefaultHome, badgesAllowed, onMakeDefault, onNotificationAccess, onLocation,
-                    onWeatherChanged, onExport, onImport, accessibilityOn, onAccessibility, onPick = { picking = it })
+                    onWeatherChanged, onExport, onImport, accessibilityOn, onAccessibility, onPick = { picking = it },
+                    onGuide = onGuide, onOnboarding = onOnboarding)
                 Spacer(Modifier.height(24.dp))
             }
         }
@@ -265,6 +267,7 @@ private fun SettingsOptions(
     category: SettingsCategory, sub: String, launcher: Launcher, isDefaultHome: Boolean, badgesAllowed: Boolean,
     onMakeDefault: () -> Unit, onNotificationAccess: () -> Unit, onLocation: () -> Unit, onWeatherChanged: () -> Unit,
     onExport: () -> Unit, onImport: () -> Unit, accessibilityOn: Boolean, onAccessibility: () -> Unit, onPick: (String) -> Unit,
+    onGuide: () -> Unit = {}, onOnboarding: () -> Unit = {},
 ) {
     val s = launcher.settings
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -370,6 +373,7 @@ private fun SettingsOptions(
                 if (badgesAllowed) "Ouvrir" else "Activer", onNotificationAccess)
         }
         SettingsCategory.GESTURES to "Gestes" -> Section("Gestes sur l’accueil") {
+            ActionRow("Guide des gestes", "Tous les gestes de Pli expliqués", "Voir", onGuide)
             ToggleRow("Glisser vers le bas en haut de l’écran", "Ouvre les notifications (ailleurs : la recherche)", s.swipeDownNotifications) { v ->
                 launcher.updateSettings { it.copy(swipeDownNotifications = v) } }
             GestureRow("Double appui sur un espace vide", s.doubleTap, launcher, onPick = { onPick("doubleTap") }) { v -> launcher.updateSettings { it.copy(doubleTap = v) } }
@@ -382,6 +386,10 @@ private fun SettingsOptions(
             if (!isDefaultHome) ActionRow("Faire de Pli l’appli d’accueil", "Pour le bouton Accueil, les raccourcis et les deux écrans", "Choisir", onMakeDefault)
             else Text("Pli est ton appli d’accueil.", color = Holo.Soft, fontSize = 14.sp, modifier = Modifier.padding(16.dp))
             ToggleRow("Vibrations", "Petit retour haptique sur les appuis longs et les déplacements", s.haptics) { v -> launcher.updateSettings { it.copy(haptics = v) } }
+            ToggleRow("Économie de batterie", "Sous 20 % (hors charge) : halos figés et ouverture des applis simple", s.batterySaver) { v ->
+                launcher.updateSettings { it.copy(batterySaver = v) } }
+            ActionRow("Guide des gestes", "Tous les gestes de Pli expliqués", "Voir", onGuide)
+            ActionRow("Revoir la présentation", "Les étapes du premier lancement", "Ouvrir", onOnboarding)
             Text("Pli · launcher holographique pour Galaxy Z Fold", color = Holo.Muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         }
         SettingsCategory.GENERAL to "Sauvegarde" -> Section("Sauvegarde") {
@@ -393,7 +401,7 @@ private fun SettingsOptions(
 }
 
 @Composable
-private fun WeatherSettings(launcher: Launcher, onLocation: () -> Unit, onWeatherChanged: () -> Unit) {
+internal fun WeatherSettings(launcher: Launcher, onLocation: () -> Unit, onWeatherChanged: () -> Unit) {
     val scope = rememberCoroutineScope()
     var city by remember { mutableStateOf(launcher.settings.city) }
     var cityStatus by remember { mutableStateOf<String?>(null) }

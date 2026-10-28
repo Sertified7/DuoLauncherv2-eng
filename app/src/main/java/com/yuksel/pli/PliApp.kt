@@ -108,7 +108,7 @@ class HostSignals {
     var isDefaultHome by mutableStateOf(true)
 }
 
-private enum class Panel { NONE, SEARCH, DRAWER, SETTINGS, WIDGETS, HOME_MENU, ADD_APPS }
+private enum class Panel { NONE, SEARCH, DRAWER, SETTINGS, WIDGETS, HOME_MENU, ADD_APPS, GUIDE, ONBOARDING }
 
 /**
  * Swipe up / down on the home screen. It watches the touch before the icons and pages do
@@ -168,6 +168,11 @@ fun PliApp(host: PliHost, signals: HostSignals) {
     var showToday by remember { mutableIntStateOf(0) }
     var screen by remember { mutableStateOf(Screen.COVER) }
     val drag = remember { DragState() }
+    // Battery saver: below 20 % and not charging.
+    LaunchedEffect(today.battery, launcher.settings.batterySaver) {
+        val b = today.battery
+        launcher.lowPower = launcher.settings.batterySaver && b != null && b.level <= 20 && !b.charging
+    }
     var article by remember { mutableStateOf<Article?>(null) }
     var homeMenu by remember { mutableStateOf(Triple(Screen.COVER, 0, 1)) }
     LaunchedEffect(launcher.iconReloads) { if (launcher.iconReloads > 0) launcher.reloadApps() }
@@ -188,7 +193,7 @@ fun PliApp(host: PliHost, signals: HostSignals) {
     var burst by remember { mutableStateOf<Pair<Rect, Long>?>(null) }
     val open: (AppInfo, Rect?) -> Unit = { app, bounds ->
         val go = {
-            if (launcher.settings.launchAnimation == "holo" && bounds != null && bounds != Rect.Zero) burst = bounds to System.nanoTime()
+            if (launcher.settings.launchAnimation == "holo" && !launcher.lowPower && bounds != null && bounds != Rect.Zero) burst = bounds to System.nanoTime()
             launcher.recordLaunch(app, screen)
             host.launch(app, bounds?.takeIf { it != Rect.Zero })
             if (panel == Panel.SEARCH || panel == Panel.DRAWER) panel = Panel.NONE
@@ -242,7 +247,7 @@ fun PliApp(host: PliHost, signals: HostSignals) {
     CompositionLocalProvider(LocalBubbles provides launcher.settings.bubbles, LocalIconShape provides launcher.settings.iconShape, LocalBadges provides badges, LocalSelection provides selection,
         androidx.compose.ui.platform.LocalHapticFeedback provides if (launcher.settings.haptics) androidx.compose.ui.platform.LocalHapticFeedback.current else NoHaptics) {
         Box(Modifier.fillMaxSize()) {
-            HoloBackground(launcher.settings.phoneWallpaper, launcher.settings.parallax)
+            HoloBackground(launcher.settings.phoneWallpaper, launcher.settings.parallax && !launcher.lowPower)
             // Home ignores the keyboard so the grid never changes size while typing.
             if (launcher.loaded) BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout))) {
                 val wide = maxWidth >= 600.dp
@@ -312,6 +317,14 @@ fun PliApp(host: PliHost, signals: HostSignals) {
                     panel = Panel.NONE
                 }, onClose = { panel = Panel.NONE })
             }
+            FullPanel(panel == Panel.GUIDE) { m -> GestureGuide(m) { panel = Panel.SETTINGS } }
+            FullPanel(panel == Panel.ONBOARDING || (launcher.loaded && !launcher.settings.onboarded && panel == Panel.NONE)) { m ->
+                Onboarding(launcher, signals.isDefaultHome, today.notificationsAllowed, m,
+                    onMakeDefault = host::requestDefaultHome, onNotificationAccess = host::openNotificationAccess,
+                    onLocation = { host.requestPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION); weatherTick++ },
+                    onWeatherChanged = { weatherTick++ }, onImport = host::importBackup,
+                    onDone = { launcher.updateSettings { it.copy(onboarded = true) }; panel = Panel.NONE })
+            }
             FullPanel(panel == Panel.DRAWER) {
                 AppDrawer(launcher, it, { app, r -> open(app, r) }, onHold = { app, r -> menu = MenuRequest(app.id, r, Origin.Drawer) },
                     onClose = { panel = Panel.NONE })
@@ -324,6 +337,7 @@ fun PliApp(host: PliHost, signals: HostSignals) {
                         onLocation = { host.requestPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION); weatherTick++ },
                         onWeatherChanged = { weatherTick++ },
                         onExport = host::exportBackup, onImport = host::importBackup,
+                        onGuide = { panel = Panel.GUIDE }, onOnboarding = { panel = Panel.ONBOARDING },
                         accessibilityOn = PliAccessibility.enabled(context), onAccessibility = host::openAccessibilitySettings)
                 }
             }

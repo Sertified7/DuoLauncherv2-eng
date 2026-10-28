@@ -22,6 +22,8 @@ class Launcher(private val context: Context) {
     var layout by mutableStateOf(HomeLayout()); private set
     var settings by mutableStateOf(PliSettings()); private set
     var loaded by mutableStateOf(false); private set
+    /** True while the battery saver is active (battery low and not charging). */
+    var lowPower by mutableStateOf(false)
     /** Bumped when the icon look changes so the UI reloads the apps. */
     var iconReloads by mutableStateOf(0); private set
     /** The last app opened from Pli, and on which screen, for "Continuer" after folding or unfolding. */

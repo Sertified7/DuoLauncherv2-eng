@@ -36,6 +36,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.LinkOff
+import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Remove
@@ -136,12 +138,29 @@ fun TodayColumn(
         } else if (editing) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             PillButton("Terminé", highlighted = true) { onEditing(false) }
         }
-        items.forEachIndexed { index, item ->
-            val hiddenWhenIdle = item.kind == TodayItem.MEDIA && nowPlaying == null && today.notificationsAllowed
-            if (hiddenWhenIdle && !editing) return@forEachIndexed
+        val card: @Composable (TodayItem) -> Unit = { item ->
+            when (item.kind) {
+                TodayItem.WEATHER -> WeatherCard(today.weather, onSettings, onPermission)
+                TodayItem.AGENDA -> AgendaCard(today, onPermission)
+                TodayItem.MEDIA -> {
+                    val playing = nowPlaying
+                    if (playing != null) NowPlayingCard(playing) { onOpenPackage(playing.packageName) }
+                    else if (!today.notificationsAllowed) HintCard("Lecture en cours", "Autorise l’accès aux notifications pour voir et piloter la musique.", "Autoriser", onNotificationAccess)
+                    else HintCard("Lecture en cours", "Rien en lecture pour l’instant.", null, null)
+                }
+                TodayItem.BATTERY -> BatteryCard(today, onPermission)
+                TodayItem.NOTE -> NoteCard(launcher)
+                TodayItem.TOGGLES -> TogglesCard(onPermission)
+                TodayItem.TASKS -> TasksCard()
+                TodayItem.SCREEN_TIME -> ScreenTimeCard(launcher, today.refreshCount)
+                TodayItem.KIND_ANDROID -> AndroidWidgetCard(widgets, item)
+            }
+        }
+        fun idle(item: TodayItem) = item.kind == TodayItem.MEDIA && nowPlaying == null && today.notificationsAllowed
+        if (editing) items.forEachIndexed { index, item ->
             Column {
-                if (editing) EditBar(
-                    title = cardTitle(item, widgets),
+                EditBar(
+                    title = cardTitle(item, widgets) + if (item.stack.isNotEmpty()) " · pile" else "",
                     canUp = index > 0, canDown = index < items.lastIndex, resizable = item.isAndroid,
                     onUp = { launcher.update { it.copy(today = it.today.move(index, index - 1)) } },
                     onDown = { launcher.update { it.copy(today = it.today.move(index, index + 1)) } },
@@ -150,24 +169,29 @@ fun TodayColumn(
                     onRemove = {
                         if (item.isAndroid) widgets.delete(item.widgetId)
                         launcher.update { l -> l.copy(today = l.today.filterNot { it.key == item.key }) }
-                    })
-                when (item.kind) {
-                    TodayItem.WEATHER -> WeatherCard(today.weather, onSettings, onPermission)
-                    TodayItem.AGENDA -> AgendaCard(today, onPermission)
-                    TodayItem.MEDIA -> {
-                        val playing = nowPlaying
-                        if (playing != null) NowPlayingCard(playing) { onOpenPackage(playing.packageName) }
-                        else if (!today.notificationsAllowed) HintCard("Lecture en cours", "Autorise l’accès aux notifications pour voir et piloter la musique.", "Autoriser", onNotificationAccess)
-                        else HintCard("Lecture en cours", "Rien en lecture pour l’instant.", null, null)
-                    }
-                    TodayItem.BATTERY -> BatteryCard(today, onPermission)
-                    TodayItem.NOTE -> NoteCard(launcher)
-                    TodayItem.TOGGLES -> TogglesCard(onPermission)
-                    TodayItem.TASKS -> TasksCard()
-                    TodayItem.SCREEN_TIME -> ScreenTimeCard(launcher, today.refreshCount)
-                    TodayItem.KIND_ANDROID -> AndroidWidgetCard(widgets, item)
-                }
+                    },
+                    stacked = item.stack.isNotEmpty(),
+                    canStack = index < items.lastIndex,
+                    onStack = {
+                        launcher.update { l ->
+                            val next = l.today.getOrNull(index + 1) ?: return@update l
+                            val id = item.stack.ifEmpty { next.stack.ifEmpty { "s" + System.nanoTime().toString(36) } }
+                            l.copy(today = l.today.mapIndexed { i, t ->
+                                if (i == index || i == index + 1 || (next.stack.isNotEmpty() && t.stack == next.stack)) t.copy(stack = id) else t })
+                        }
+                    },
+                    onUnstack = { launcher.update { l -> l.copy(today = l.today.map { if (it.key == item.key) it.copy(stack = "") else it }) } })
+                card(item)
             }
+        } else {
+            // Consecutive cards of one stack become one swipeable card.
+            val groups = ArrayList<List<TodayItem>>()
+            items.filterNot(::idle).forEach { item ->
+                val last = groups.lastOrNull()
+                if (last != null && item.stack.isNotEmpty() && last.first().stack == item.stack) groups[groups.lastIndex] = last + item
+                else groups += listOf(item)
+            }
+            groups.forEach { group -> if (group.size == 1) card(group[0]) else StackedCards(group, card) }
         }
         if (editing || items.isEmpty()) Row(Modifier.fillMaxWidth().height(56.dp).glass(cardShape, .04f).clickable(onClick = onAddWidget),
             horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
@@ -197,13 +221,16 @@ fun cardTitle(item: TodayItem, widgets: Widgets): String = when (item.kind) {
 
 @Composable
 private fun EditBar(title: String, canUp: Boolean, canDown: Boolean, resizable: Boolean,
-    onUp: () -> Unit, onDown: () -> Unit, onBigger: () -> Unit, onSmaller: () -> Unit, onRemove: () -> Unit) {
+    onUp: () -> Unit, onDown: () -> Unit, onBigger: () -> Unit, onSmaller: () -> Unit, onRemove: () -> Unit,
+    stacked: Boolean = false, canStack: Boolean = false, onStack: () -> Unit = {}, onUnstack: () -> Unit = {}) {
     Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, color = Holo.Muted, fontSize = 12.sp, modifier = Modifier.weight(1f).padding(start = 6.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (resizable) {
             SmallRound(Icons.Rounded.Remove, "Réduire", onSmaller)
             SmallRound(Icons.Rounded.Add, "Agrandir", onBigger)
         }
+        if (stacked) SmallRound(Icons.Rounded.LinkOff, "Sortir de la pile", onUnstack)
+        else if (canStack) SmallRound(Icons.Rounded.Layers, "Empiler avec le suivant", onStack)
         SmallRound(Icons.Rounded.KeyboardArrowUp, "Monter", onUp, canUp)
         SmallRound(Icons.Rounded.KeyboardArrowDown, "Descendre", onDown, canDown)
         SmallRound(Icons.Rounded.Close, "Retirer", onRemove, tint = Holo.Badge)
@@ -421,4 +448,20 @@ fun WidgetPicker(launcher: Launcher, widgets: Widgets, modifier: Modifier, onPic
 fun defaultWidgetHeight(context: Context, info: AppWidgetProviderInfo): Int {
     val density = context.resources.displayMetrics.density
     return (info.minHeight / density).toInt().coerceIn(110, 420)
+}
+
+/** Several cards in one place: swipe sideways to go through them. */
+@Composable
+private fun StackedCards(group: List<TodayItem>, card: @Composable (TodayItem) -> Unit) {
+    val pager = androidx.compose.foundation.pager.rememberPagerState { group.size }
+    Column {
+        androidx.compose.foundation.pager.HorizontalPager(pager, Modifier.fillMaxWidth(), pageSpacing = 12.dp,
+            verticalAlignment = Alignment.Top) { page -> card(group[page]) }
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.Center) {
+            repeat(group.size) { i ->
+                Box(Modifier.padding(horizontal = 3.dp).size(if (pager.currentPage == i) 7.dp else 5.dp)
+                    .background(if (pager.currentPage == i) Holo.Violet else Color.White.copy(alpha = .3f), CircleShape))
+            }
+        }
+    }
 }
