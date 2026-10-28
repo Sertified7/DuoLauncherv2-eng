@@ -23,6 +23,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -150,6 +153,7 @@ fun PliApp(host: PliHost, signals: HostSignals) {
     var screen by remember { mutableStateOf(Screen.COVER) }
     val drag = remember { DragState() }
     var article by remember { mutableStateOf<Article?>(null) }
+    var homeMenu by remember { mutableStateOf(Triple(Screen.COVER, 0, 1)) }
     LaunchedEffect(launcher.iconReloads) { if (launcher.iconReloads > 0) launcher.reloadApps() }
 
 
@@ -189,7 +193,7 @@ fun PliApp(host: PliHost, signals: HostSignals) {
     val actions = HomeActions(
         open = open, openFolder = { folder = it to screen; renameFolder = false },
         menu = showMenu, closeMenu = { menu = null },
-        emptyHold = { panel = Panel.HOME_MENU }, search = { panel = Panel.SEARCH }, drawer = { panel = Panel.DRAWER },
+        emptyHold = { sc, page, cap -> homeMenu = Triple(sc, page, cap); panel = Panel.HOME_MENU }, search = { panel = Panel.SEARCH }, drawer = { panel = Panel.DRAWER },
         notifications = { host.expandNotifications() },
         todayEditing = { todayEditing }, setTodayEditing = { todayEditing = it },
         addWidget = { panel = Panel.WIDGETS }, settings = { panel = Panel.SETTINGS },
@@ -199,7 +203,8 @@ fun PliApp(host: PliHost, signals: HostSignals) {
     CompositionLocalProvider(LocalBubbles provides launcher.settings.bubbles, LocalBadges provides badges) {
         Box(Modifier.fillMaxSize()) {
             HoloBackground(launcher.settings.phoneWallpaper, launcher.settings.parallax)
-            if (launcher.loaded) BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+            // Home ignores the keyboard so the grid never changes size while typing.
+            if (launcher.loaded) BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout))) {
                 val wide = maxWidth >= 600.dp
                 val current = if (wide) Screen.INNER else Screen.COVER
                 SideEffect { if (screen != current) { screen = current; drag.clear() } }
@@ -246,9 +251,18 @@ fun PliApp(host: PliHost, signals: HostSignals) {
                     },
                     onClose = { panel = Panel.NONE })
             }
-            if (panel == Panel.HOME_MENU) HomeMenu(onDismiss = { panel = Panel.NONE }, onWidgets = { panel = Panel.WIDGETS },
-                onSettings = { panel = Panel.SETTINGS }, onApps = { panel = Panel.DRAWER },
-                onToday = { todayEditing = true; showToday++ })
+            if (panel == Panel.HOME_MENU) {
+                val (menuScreen, page, cap) = homeMenu
+                val list = launcher.layout.home(menuScreen)
+                val pageEmpty = (page * cap until (page + 1) * cap).all { list.getOrElse(it) { "" }.isEmpty() }
+                HomeMenu(onDismiss = { panel = Panel.NONE },
+                    onWidgets = if (menuScreen == Screen.INNER) ({ panel = Panel.WIDGETS }) else null,
+                    onSettings = { panel = Panel.SETTINGS }, onApps = { panel = Panel.DRAWER },
+                    onToday = if (menuScreen == Screen.INNER) ({ todayEditing = true }) else null,
+                    onAddPage = { launcher.update { LayoutEdits.addPage(it, menuScreen) } },
+                    onDeletePage = if (pageEmpty && launcher.layout.pages(menuScreen) > 1)
+                        ({ launcher.update { LayoutEdits.deletePage(it, menuScreen, page, cap) } }) else null)
+            }
             folder?.let { (id, s) ->
                 FolderPanel(id, s, launcher, renameFolder, onDismiss = { folder = null }, onOpen = { app, r -> open(app, r) },
                     onHold = { menu = it })
@@ -268,7 +282,7 @@ class HomeActions(
     val openFolder: (String) -> Unit,
     val menu: (String, Rect, DragSource) -> Unit,
     val closeMenu: () -> Unit,
-    val emptyHold: () -> Unit,
+    val emptyHold: (Screen, Int, Int) -> Unit,
     val search: () -> Unit,
     val drawer: () -> Unit,
     val notifications: () -> Unit,
@@ -284,7 +298,7 @@ class HomeActions(
 @Composable
 private fun FullPanel(visible: Boolean, content: @Composable (Modifier) -> Unit) {
     AnimatedVisibility(visible, enter = fadeIn() + slideInVertically { it / 8 }, exit = fadeOut() + slideOutVertically { it / 8 }) {
-        Box(Modifier.fillMaxSize().background(Holo.Base.copy(alpha = .93f))
+        Box(Modifier.fillMaxSize().background(Holo.Base.copy(alpha = .985f))
             .clickable(remember { MutableInteractionSource() }, null) {}) {
             Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Holo.Violet.copy(alpha = .10f), Color.Transparent),
                 center = Offset(0f, 0f), radius = 1400f)))
@@ -321,33 +335,25 @@ private fun CoverHome(host: PliHost, signals: HostSignals, today: TodayState, dr
     val items = launcher.visibleHome(Screen.COVER)
     val nowPlaying by MediaWatcher.nowPlaying.collectAsState()
     val discover = launcher.settings.discover
-    val lead = if (discover) 2 else 1
+    val lead = if (discover) 1 else 0
     var homePages by remember { mutableIntStateOf(1) }
     val pager = rememberPagerState(initialPage = lead) { lead + homePages + if (drag.active) 1 else 0 }
     HomePressScroll(signals, pager, lead)
-    LaunchedEffect(showToday) { if (showToday > 0) pager.animateScrollToPage(lead - 1) }
     Column(Modifier.fillMaxSize().homeSwipes(swipesOn, { drag.source != null || pager.currentPage < lead }, actions.drawer, { swipeDown(host, actions, it) }, { up -> actions.gesture(if (up) launcher.settings.twoFingerUp else launcher.settings.twoFingerDown) })) {
-        ClockHeader(today, 84.sp, compact = false, Modifier.padding(start = 22.dp, end = 22.dp, top = 10.dp), onWeather = {})
+        ClockHeader(today, 84.sp, compact = false, Modifier.padding(start = 22.dp, end = 22.dp, top = 10.dp), onWeather = {},
+            nowPlaying = nowPlaying, onOpenPlaying = { host.openPackage(it) })
         Spacer(Modifier.height(10.dp))
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val s = launcher.settings
             val metrics = gridMetrics(maxWidth, maxHeight - 18.dp, s.labels, wide = false, s.coverColumns, s.coverRows)
-            val pages = maxOf(1, (items.size + metrics.capacity - 1) / metrics.capacity)
-            SideEffect { homePages = pages }
+            val pages = maxOf(launcher.layout.coverPages, (items.size + metrics.capacity - 1) / metrics.capacity, 1)
+            SideEffect { homePages = pages; launcher.useGrid(Screen.COVER, Grid(metrics.columns, metrics.rows)) }
             Column(Modifier.fillMaxSize()) {
                 HomePages(Screen.COVER, launcher, items, metrics, pager, lead, drag, s.labels, Modifier.weight(1f),
                     onOpenApp = { a, r -> actions.open(a, r) }, onOpenFolder = actions.openFolder,
-                    onMenu = actions.menu, onCloseMenu = actions.closeMenu, onEmptyHold = actions.emptyHold, onEmptyDoubleTap = { actions.gesture(launcher.settings.doubleTap) },
-                    leadingPage = { page ->
-                        if (discover && page == 0) NewsPage(Modifier.fillMaxSize().padding(horizontal = 16.dp), actions.read)
-                        else TodayColumn(launcher, host.widgets, today, actions.todayEditing(), Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                            onEditing = actions.setTodayEditing, onAddWidget = actions.addWidget, onPermission = host::requestPermission,
-                            onNotificationAccess = host::openNotificationAccess, onSettings = actions.settings, onOpenPackage = host::openPackage)
-                    })
-                val playing = nowPlaying
-                if (playing != null && pager.currentPage >= lead) NowPlayingCard(playing, Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
-                    host.openPackage(playing.packageName)
-                }
+                    onMenu = actions.menu, onCloseMenu = actions.closeMenu, onEmptyHold = { actions.emptyHold(Screen.COVER, it, metrics.capacity) },
+                    onEmptyDoubleTap = { actions.gesture(launcher.settings.doubleTap) }, homePages = pages,
+                    leadingPage = { NewsPage(Modifier.fillMaxSize().padding(horizontal = 16.dp), actions.read) })
                 PageDots(pager, pager.pageCount, lead, modifier = Modifier.align(Alignment.CenterHorizontally))
             }
         }
@@ -384,12 +390,13 @@ private fun InnerHome(host: PliHost, signals: HostSignals, today: TodayState, dr
                 BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                     val s = launcher.settings
                     val metrics = gridMetrics(maxWidth - 16.dp, maxHeight - 18.dp, s.labels, wide = true, s.innerColumns, s.innerRows)
-                    val pages = maxOf(1, (items.size + metrics.capacity - 1) / metrics.capacity)
-                    SideEffect { homePages = pages }
+                    val pages = maxOf(launcher.layout.innerPages, (items.size + metrics.capacity - 1) / metrics.capacity, 1)
+                    SideEffect { homePages = pages; launcher.useGrid(Screen.INNER, Grid(metrics.columns, metrics.rows)) }
                     Column(Modifier.fillMaxSize()) {
                         HomePages(Screen.INNER, launcher, items, metrics, pager, lead, drag, s.labels, Modifier.weight(1f).padding(horizontal = 8.dp),
                             onOpenApp = { a, r -> actions.open(a, r) }, onOpenFolder = actions.openFolder,
-                            onMenu = actions.menu, onCloseMenu = actions.closeMenu, onEmptyHold = actions.emptyHold, onEmptyDoubleTap = { actions.gesture(launcher.settings.doubleTap) },
+                            onMenu = actions.menu, onCloseMenu = actions.closeMenu, onEmptyHold = { actions.emptyHold(Screen.INNER, it, metrics.capacity) },
+                            onEmptyDoubleTap = { actions.gesture(launcher.settings.doubleTap) }, homePages = pages,
                             leadingPage = { NewsPage(Modifier.fillMaxSize().padding(horizontal = 8.dp), actions.read) })
                         PageDots(pager, pager.pageCount, lead, modifier = Modifier.align(Alignment.CenterHorizontally))
                     }

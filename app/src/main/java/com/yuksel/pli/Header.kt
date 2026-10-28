@@ -86,7 +86,8 @@ fun capitalize(text: String) = text.replaceFirstChar { it.titlecase(FR) }
 /** Date, huge iridescent time and the glance chips (weather, next event, battery). */
 @Composable
 fun ClockHeader(today: TodayState, clockSize: TextUnit, compact: Boolean, modifier: Modifier = Modifier,
-    onWeather: () -> Unit, trailing: (@Composable () -> Unit)? = null) {
+    onWeather: () -> Unit, trailing: (@Composable () -> Unit)? = null,
+    nowPlaying: NowPlaying? = null, onOpenPlaying: (String) -> Unit = {}) {
     val context = LocalContext.current
     val now = rememberNow()
     val pattern = if (DateFormat.is24HourFormat(context)) "H:mm" else "h:mm"
@@ -102,7 +103,10 @@ fun ClockHeader(today: TodayState, clockSize: TextUnit, compact: Boolean, modifi
             }
             trailing?.invoke()
         }
-        if (!compact) Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Fixed height: music replaces the chips while playing, without moving the icons below.
+        if (!compact) Box(Modifier.padding(top = 10.dp).height(64.dp).fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
+        if (nowPlaying != null) NowPlayingCard(nowPlaying, compactCard = true) { onOpenPlaying(nowPlaying.packageName) }
+        else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             today.weather?.let { w -> Chip("${w.temperature}° ${w.label}", skyIcon(w.sky), onWeather) }
             today.events.firstOrNull { !it.allDay }?.let { e ->
                 Chip("${e.title} ${e.start.format(DateTimeFormatter.ofPattern(pattern))}", Icons.Rounded.Event) { openCalendar(context) }
@@ -112,6 +116,7 @@ fun ClockHeader(today: TodayState, clockSize: TextUnit, compact: Boolean, modifi
                     runCatching { context.startActivity(Intent(Intent.ACTION_POWER_USAGE_SUMMARY).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
                 }
             }
+        }
         }
     }
 }
@@ -134,8 +139,8 @@ private fun Chip(text: String, icon: ImageVector, onClick: () -> Unit) {
 
 /** "Lecture en cours": artwork, title, controls. Tapping it opens the playing app. */
 @Composable
-fun NowPlayingCard(playing: NowPlaying, modifier: Modifier = Modifier, onOpen: () -> Unit) {
-    Row(modifier.fillMaxWidth().glass(RoundedCornerShape(26.dp)).clickable(onClick = onOpen).padding(12.dp),
+fun NowPlayingCard(playing: NowPlaying, modifier: Modifier = Modifier, compactCard: Boolean = false, onOpen: () -> Unit) {
+    Row(modifier.fillMaxWidth().glass(RoundedCornerShape(26.dp)).clickable(onClick = onOpen).padding(if (compactCard) 8.dp else 12.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp))
             .background(Brush.linearGradient(listOf(Holo.Cyan, Holo.Violet))), contentAlignment = Alignment.Center) {

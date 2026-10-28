@@ -223,7 +223,7 @@ private fun ResultRow(icon: ImageVector, title: String, subtitle: String, onClic
 @Composable
 private fun AppChoice(app: AppInfo, size: androidx.compose.ui.unit.Dp, onOpen: (AppInfo, Rect) -> Unit, onHold: ((AppInfo, Rect) -> Unit)?) {
     var bounds by remember { mutableStateOf(Rect.Zero) }
-    Column(Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.clip(RoundedCornerShape(18.dp))
+    Column(Modifier.fillMaxWidth().onGloballyPositioned { bounds = it.boundsInRoot() }.clip(RoundedCornerShape(18.dp))
         .combinedClickable(onClick = { onOpen(app, bounds) }, onLongClick = onHold?.let { { it(app, bounds) } })
         .padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         AppIcon(app, size)

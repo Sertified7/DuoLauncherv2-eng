@@ -25,7 +25,9 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AddBox
 import androidx.compose.material.icons.rounded.AddToHomeScreen
+import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DriveFileRenameOutline
@@ -141,17 +143,12 @@ fun AppMenu(request: MenuRequest, launcher: Launcher, currentScreen: Screen, onD
                     Divider()
                     MenuRow(Icons.Rounded.DriveFileRenameOutline, "Renommer") { onRenameFolder(folder.id); onDismiss() }
                     MenuRow(Icons.Rounded.CallSplit, "Défaire le dossier") {
-                        launcher.update { l ->
-                            val screen = (request.origin as? Origin.Home)?.screen ?: currentScreen
-                            val list = l.home(screen)
-                            val apps = l.folders[folder.id]?.apps ?: emptyList()
-                            l.withHome(screen, list.flatMap { if (it == folder.id) apps else listOf(it) }).copy(folders = l.folders - folder.id)
-                        }
+                        launcher.update { l -> LayoutEdits.ungroup(l, (request.origin as? Origin.Home)?.screen ?: currentScreen, folder.id) }
                         onDismiss()
                     }
                     MenuRow(Icons.Rounded.RemoveCircleOutline, "Retirer de l’accueil", Holo.Pink) {
                         val screen = (request.origin as? Origin.Home)?.screen ?: currentScreen
-                        launcher.update { l -> l.withHome(screen, l.home(screen) - folder.id).copy(folders = l.folders - folder.id) }
+                        launcher.update { l -> l.withHome(screen, LayoutEdits.blank(l.home(screen), setOf(folder.id))).copy(folders = l.folders - folder.id) }
                         onDismiss()
                     }
                     return@MenuCard
@@ -227,14 +224,17 @@ fun AppMenu(request: MenuRequest, launcher: Launcher, currentScreen: Screen, onD
 
 /** Long press on an empty spot of the home screen. */
 @Composable
-fun HomeMenu(onDismiss: () -> Unit, onWidgets: () -> Unit, onSettings: () -> Unit, onApps: () -> Unit, onToday: () -> Unit) {
+fun HomeMenu(onDismiss: () -> Unit, onWidgets: (() -> Unit)?, onSettings: () -> Unit, onApps: () -> Unit, onToday: (() -> Unit)?,
+    onAddPage: () -> Unit, onDeletePage: (() -> Unit)?) {
     Box(Modifier.fillMaxSize()) {
         Scrim(.35f, onDismiss)
         Anchored(Rect.Zero) {
             MenuCard {
                 Text("Pli", color = Holo.Muted, fontSize = 12.sp, letterSpacing = 2.sp, modifier = Modifier.padding(10.dp))
-                MenuRow(Icons.Rounded.Widgets, "Ajouter un widget") { onDismiss(); onWidgets() }
-                MenuRow(Icons.Rounded.ViewDay, "Modifier « Aujourd’hui »") { onDismiss(); onToday() }
+                MenuRow(Icons.Rounded.AddBox, "Ajouter une page") { onDismiss(); onAddPage() }
+                if (onDeletePage != null) MenuRow(Icons.Rounded.DeleteSweep, "Supprimer cette page", Holo.Pink) { onDismiss(); onDeletePage() }
+                if (onWidgets != null) MenuRow(Icons.Rounded.Widgets, "Ajouter un widget") { onDismiss(); onWidgets() }
+                if (onToday != null) MenuRow(Icons.Rounded.ViewDay, "Modifier « Aujourd’hui »") { onDismiss(); onToday() }
                 MenuRow(Icons.Rounded.Apps, "Toutes les applis") { onDismiss(); onApps() }
                 MenuRow(Icons.Rounded.Tune, "Réglages de Pli") { onDismiss(); onSettings() }
             }

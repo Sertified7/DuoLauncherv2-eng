@@ -83,7 +83,7 @@ class DragState {
     // Registered by the visible home grid and dock (root coordinates).
     var screen = Screen.COVER
     val homeCells = HashMap<Int, Rect>()
-    var homeCount = 0
+    var homeSlots = 0
     var gridRect = Rect.Zero
     var pageCapacity = 1
     var currentHomePage = 0
@@ -115,37 +115,34 @@ class DragState {
         if (!gridRect.contains(p)) return null
         val dragged = draggedId
         val folderDrag = dragged != null && HomeLayout.isFolder(dragged)
-        for (i in 0 until homeCount) {
-            val r = homeCells[i] ?: continue
-            if (!r.contains(p)) continue
+        for ((i, r) in homeCells) {
+            if (i >= homeSlots || !r.contains(p)) continue
+            val id = homeIndexOf(i).orEmpty()
+            if (id.isEmpty() || id == dragged) return DropSpot.Home(screen, i)
             val iconCenter = Offset(r.center.x, r.top + iconPx / 2f)
-            val draggedHere = (source as? DragSource.Home)?.let { it.screen == screen && it.id == dragged } == true && homeIndexOf(i) == dragged
-            return when {
-                !folderDrag && !draggedHere && (p - iconCenter).getDistance() < iconPx * .36f -> DropSpot.Into(screen, i)
-                p.x > r.center.x -> DropSpot.Home(screen, i + 1)
-                else -> DropSpot.Home(screen, i)
-            }
+            return if (!folderDrag && (p - iconCenter).getDistance() < iconPx * .38f) DropSpot.Into(screen, i)
+            else DropSpot.Home(screen, i)
         }
-        return DropSpot.Home(screen, minOf((currentHomePage + 1) * pageCapacity, homeCount))
+        return null
     }
 
     var homeIds: List<String> = emptyList()
     private fun homeIndexOf(i: Int) = homeIds.getOrNull(i)
 }
 
-/** Converts a spot on the visible lists into one on the saved lists, then applies the drop. */
-fun applyDrop(launcher: Launcher, source: DragSource, spot: DropSpot, visibleHome: List<String>) {
+/** Converts a spot on the visible dock into one on the saved dock (home slots match 1:1), then applies the drop. */
+fun applyDrop(launcher: Launcher, source: DragSource, spot: DropSpot) {
     val layout = launcher.layout
-    fun layoutIndex(list: List<String>, visible: List<String>, vi: Int): Int = when {
-        vi < visible.size -> list.indexOf(visible[vi]).coerceAtLeast(0)
-        visible.isEmpty() -> list.size
-        else -> list.indexOf(visible.last()) + 1
-    }
-    val mapped = when (spot) {
-        is DropSpot.Home -> DropSpot.Home(spot.screen, layoutIndex(layout.home(spot.screen), visibleHome, spot.index))
-        is DropSpot.Into -> DropSpot.Into(spot.screen, layoutIndex(layout.home(spot.screen), visibleHome, spot.index))
-        is DropSpot.Dock -> DropSpot.Dock(spot.screen, layoutIndex(layout.dockOf(spot.screen), launcher.visibleDock(spot.screen), spot.index))
-    }
+    val mapped = if (spot is DropSpot.Dock) {
+        val visible = launcher.visibleDock(spot.screen)
+        val list = layout.dockOf(spot.screen)
+        val index = when {
+            spot.index < visible.size -> list.indexOf(visible[spot.index]).coerceAtLeast(0)
+            visible.isEmpty() -> list.size
+            else -> list.indexOf(visible.last()) + 1
+        }
+        DropSpot.Dock(spot.screen, index)
+    } else spot
     launcher.update { LayoutEdits.drop(it, source, mapped, launcher.dockSizes) }
 }
 
@@ -186,15 +183,15 @@ fun HomePages(
     screen: Screen, launcher: Launcher, items: List<String>, metrics: GridMetrics, pager: PagerState, pageOffset: Int,
     drag: DragState, labels: Boolean, modifier: Modifier,
     onOpenApp: (AppInfo, Rect) -> Unit, onOpenFolder: (String) -> Unit,
-    onMenu: (String, Rect, DragSource) -> Unit, onCloseMenu: () -> Unit, onEmptyHold: () -> Unit,
-    onEmptyDoubleTap: () -> Unit = {},
+    onMenu: (String, Rect, DragSource) -> Unit, onCloseMenu: () -> Unit, onEmptyHold: (Int) -> Unit,
+    onEmptyDoubleTap: () -> Unit = {}, homePages: Int,
     leadingPage: (@Composable (Int) -> Unit)? = null,
 ) {
-    val homePages = maxOf(1, (items.size + metrics.capacity - 1) / metrics.capacity)
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
     drag.screen = screen
-    drag.homeCount = items.size
+    drag.homeSlots = (homePages + 1) * metrics.capacity
+    remember(metrics, homePages, screen) { drag.homeCells.clear(); 0 }
     drag.homeIds = items
     drag.pageCapacity = metrics.capacity
     drag.currentHomePage = (pager.currentPage - pageOffset).coerceAtLeast(0)
@@ -228,14 +225,21 @@ fun HomePages(
                 Row(Modifier.fillMaxWidth().height(metrics.cellHeight)) {
                     for (col in 0 until metrics.columns) {
                         val index = first + row * metrics.columns + col
-                        val id = items.getOrNull(index)
+                        val id = items.getOrNull(index)?.takeIf { it.isNotEmpty() }
                         Box(Modifier.weight(1f).fillMaxHeight()) {
-                            if (id == null) Box(Modifier.fillMaxSize().pointerInput(Unit) {
-                                detectTapGestures(onDoubleTap = { onEmptyDoubleTap() },
-                                    onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEmptyHold() })
-                            }) else HomeCell(id, index, screen, launcher, metrics.icon, labels, drag,
+                            if (id == null) {
+                                val target = drag.active && drag.spot.let { it is DropSpot.Home && it.screen == screen && it.index == index }
+                                Box(Modifier.fillMaxSize().onGloballyPositioned { drag.homeCells[index] = it.boundsInRoot() }
+                                    .pointerInput(homePage) {
+                                        detectTapGestures(onDoubleTap = { onEmptyDoubleTap() },
+                                            onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEmptyHold(homePage) })
+                                    }, contentAlignment = Alignment.TopCenter) {
+                                    if (target) Box(Modifier.padding(top = 4.dp).size(metrics.icon).halo(Holo.Violet.copy(alpha = .3f), 10.dp)
+                                        .drawBehind { drawCircle(Brush.linearGradient(Holo.Iridescent), style = Stroke(2.dp.toPx())) })
+                                }
+                            } else HomeCell(id, index, screen, launcher, metrics.icon, labels, drag,
                                 onOpenApp, onOpenFolder, onMenu, onCloseMenu,
-                                onDrop = { drag.source?.let { s -> drag.spot?.let { sp -> applyDrop(launcher, s, sp, drag.homeIds) } } })
+                                onDrop = { drag.source?.let { s -> drag.spot?.let { sp -> applyDrop(launcher, s, sp) } } })
                         }
                     }
                 }
@@ -373,7 +377,7 @@ fun Dock(
                         .dragSource(drag, source, { bounds.topLeft },
                             onHold = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onMenu(id, bounds, source) },
                             onDragStarted = onCloseMenu,
-                            onDrop = { drag.source?.let { s -> drag.spot?.let { sp -> applyDrop(launcher, s, sp, drag.homeIds) } } })
+                            onDrop = { drag.source?.let { s -> drag.spot?.let { sp -> applyDrop(launcher, s, sp) } } })
                         .alpha(if (dragged) .25f else 1f)
                         .drawBehind {
                             if (before) drawRoundRect(Brush.verticalGradient(Holo.Iridescent), Offset(-8.dp.toPx(), 4.dp.toPx()),

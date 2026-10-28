@@ -71,16 +71,38 @@ class Launcher(private val context: Context) {
     fun updateSettings(transform: (PliSettings) -> PliSettings) {
         val next = transform(settings)
         val old = settings
+        if (next.coverColumns != old.coverColumns || next.coverRows != old.coverRows) regridPending += Screen.COVER
+        if (next.innerColumns != old.innerColumns || next.innerRows != old.innerRows) regridPending += Screen.INNER
         val resize = next.dockSize != settings.dockSize || next.innerDockSize != settings.innerDockSize
         settings = next; store.saveSettings(next)
         if (resize) update { LayoutEdits.resizeDock(it, dockSizes) }
         if (next.iconPack != old.iconPack || next.tintedIcons != old.tintedIcons) iconReloads++
     }
 
-    /** Home entries that can be shown right now (known, not hidden; folders with visible apps). */
-    fun visibleHome(screen: Screen): List<String> = layout.home(screen).filter { id ->
-        if (HomeLayout.isFolder(id)) layout.folders[id]?.apps?.any { it in byId && it !in layout.hidden } == true
-        else id in byId && id !in layout.hidden
+    /** The home slots of a screen; slots whose app can't be shown (hidden, or work profile paused) read as empty. */
+    fun visibleHome(screen: Screen): List<String> = layout.home(screen).map { id ->
+        val shown = when {
+            id == HomeLayout.EMPTY -> false
+            HomeLayout.isFolder(id) -> layout.folders[id]?.apps?.any { it in byId && it !in layout.hidden } == true
+            else -> id in byId && id !in layout.hidden
+        }
+        if (shown) id else HomeLayout.EMPTY
+    }
+
+    private val regridPending = HashSet<Screen>()
+
+    /**
+     * Remembers the grid a screen shows. Icons keep their row and column only when the user changed the grid
+     * in the settings; a size change from the screen itself (rotation, keyboard) never moves them.
+     */
+    fun useGrid(screen: Screen, grid: Grid) {
+        if (layout.grid(screen) == grid) { regridPending -= screen; return }
+        val move = screen in regridPending
+        regridPending -= screen
+        update { l ->
+            if (move) LayoutEdits.withGrid(l, screen, grid)
+            else if (screen == Screen.COVER) l.copy(coverGrid = grid) else l.copy(innerGrid = grid)
+        }
     }
 
     fun visibleDock(screen: Screen): List<String> = layout.dockOf(screen).filter { it in byId && it !in layout.hidden }
@@ -90,8 +112,9 @@ class Launcher(private val context: Context) {
 
     fun hide(app: AppInfo) = update { l ->
         val folders = l.folders.mapValues { (_, f) -> f.copy(apps = f.apps - app.id) }
-        LayoutEdits.clean(l.copy(cover = l.cover - app.id, inner = l.inner - app.id, dock = l.dock - app.id, dockExtra = l.dockExtra - app.id,
-            folders = folders, hidden = l.hidden + app.id), byId.keys)
+        LayoutEdits.clean(l.copy(dock = l.dock - app.id, dockExtra = l.dockExtra - app.id, folders = folders, hidden = l.hidden + app.id)
+            .withHome(Screen.COVER, LayoutEdits.blank(l.cover, setOf(app.id))).withHome(Screen.INNER, LayoutEdits.blank(l.inner, setOf(app.id))),
+            byId.keys + l.cover + l.inner + l.dock + l.dockExtra + l.folders.values.flatMap { it.apps } - app.id)
     }
 
     fun unhide(id: String) = update { it.copy(hidden = it.hidden - id) }
