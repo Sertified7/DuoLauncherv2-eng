@@ -123,20 +123,39 @@ fun HoloBackground(phoneWallpaper: Boolean, parallax: Boolean, modifier: Modifie
     }
 }
 
-/** True: real app icons sit in round glass bubbles. False: their own shape. */
+/** True: real app icons sit in glass frames. False: just the icon. */
 val LocalBubbles = staticCompositionLocalOf { true }
+/** The icon shape chosen in the settings (see [ICON_SHAPES]). */
+val LocalIconShape = staticCompositionLocalOf { "circle" }
 val LocalBadges = staticCompositionLocalOf<Map<String, Int>> { emptyMap() }
+
+/** Icon shapes offered in the settings: key to French name. */
+val ICON_SHAPES = listOf("circle" to "Rond", "squircle" to "Squircle", "rounded" to "Arrondi", "square" to "Carré",
+    "teardrop" to "Goutte", "leaf" to "Feuille", "original" to "D’origine")
+
+fun iconShape(name: String): Shape = when (name) {
+    "squircle" -> RoundedCornerShape(36)
+    "rounded" -> RoundedCornerShape(22)
+    "square" -> RoundedCornerShape(6)
+    "teardrop" -> RoundedCornerShape(topStartPercent = 50, topEndPercent = 50, bottomEndPercent = 12, bottomStartPercent = 50)
+    "leaf" -> RoundedCornerShape(topStartPercent = 50, topEndPercent = 8, bottomEndPercent = 50, bottomStartPercent = 8)
+    "original" -> RoundedCornerShape(0)
+    else -> CircleShape
+}
 
 @Composable
 fun AppIcon(app: AppInfo, size: Dp, modifier: Modifier = Modifier, showBadge: Boolean = true) {
     val bubbles = LocalBubbles.current
+    val shapeName = LocalIconShape.current
+    val shape = iconShape(shapeName)
     val count = if (showBadge) LocalBadges.current[app.packageName] ?: 0 else 0
     Box(modifier.size(size)) {
         if (bubbles) {
-            Box(Modifier.fillMaxSize().halo(Holo.Violet.copy(alpha = .16f), size * .2f).glass(CircleShape, .06f), contentAlignment = Alignment.Center) {
-                Image(app.icon, null, Modifier.size(size * .78f).clip(CircleShape))
+            Box(Modifier.fillMaxSize().halo(Holo.Violet.copy(alpha = .16f), size * .2f)
+                .glass(if (shapeName == "original") RoundedCornerShape(26) else shape, .06f), contentAlignment = Alignment.Center) {
+                Image(app.icon, null, Modifier.size(size * .78f).then(if (shapeName == "original") Modifier else Modifier.clip(shape)))
             }
-        } else Image(app.icon, null, Modifier.fillMaxSize().clip(RoundedCornerShape(size * .26f)))
+        } else Image(app.icon, null, Modifier.fillMaxSize().then(if (shapeName == "original") Modifier else Modifier.clip(shape)))
         if (count > 0) BadgeDot(count, Modifier.align(Alignment.TopEnd).offset(x = 4.dp, y = (-4).dp))
     }
 }

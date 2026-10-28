@@ -160,6 +160,7 @@ fun TodayColumn(
                     }
                     TodayItem.BATTERY -> BatteryCard(today, onPermission)
                     TodayItem.NOTE -> NoteCard(launcher)
+                    TodayItem.TOGGLES -> TogglesCard(onPermission)
                     TodayItem.KIND_ANDROID -> AndroidWidgetCard(widgets, item)
                 }
             }
@@ -184,6 +185,7 @@ fun cardTitle(item: TodayItem, widgets: Widgets): String = when (item.kind) {
     TodayItem.MEDIA -> "Lecture en cours"
     TodayItem.BATTERY -> "Batterie"
     TodayItem.NOTE -> "Note rapide"
+    TodayItem.TOGGLES -> "Raccourcis"
     else -> widgets.info(item.widgetId)?.let(widgets::label) ?: "Widget"
 }
 

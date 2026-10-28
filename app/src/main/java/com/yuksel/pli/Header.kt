@@ -25,6 +25,8 @@ import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.Dehaze
 import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SkipNext
@@ -160,5 +162,40 @@ fun NowPlayingCard(playing: NowPlaying, modifier: Modifier = Modifier, compactCa
             Icon(if (playing.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (playing.playing) "Pause" else "Lecture", tint = Holo.Ink)
         }
         IconButton(onClick = MediaWatcher::next, Modifier.size(40.dp)) { Icon(Icons.Rounded.SkipNext, "Suivant", tint = Holo.Ink) }
+    }
+}
+
+private const val GOOGLE_APP = "com.google.android.googlequicksearchbox"
+private const val FINDER_APP = "com.samsung.android.app.galaxyfinder"
+
+/** The search button right of the clock: Google (with voice), Samsung Finder or Pli's own search. */
+@Composable
+fun HeaderSearch(kind: String, onPliSearch: () -> Unit) {
+    val context = LocalContext.current
+    val pm = context.packageManager
+    fun start(intent: Intent) = runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true }.getOrDefault(false)
+    val google = kind == "google" && pm.getLaunchIntentForPackage(GOOGLE_APP) != null
+    val finder = kind == "finder" && pm.getLaunchIntentForPackage(FINDER_APP) != null
+    Row(Modifier.padding(start = 8.dp, bottom = 10.dp).height(48.dp).halo(Holo.Violet.copy(alpha = .15f), 8.dp)
+        .glass(RoundedCornerShape(50), .08f), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(48.dp).clip(CircleShape).clickable {
+            val ok = when {
+                google -> start(Intent("android.search.action.GLOBAL_SEARCH").setPackage(GOOGLE_APP)) ||
+                    start(pm.getLaunchIntentForPackage(GOOGLE_APP)!!)
+                finder -> start(pm.getLaunchIntentForPackage(FINDER_APP)!!)
+                else -> false
+            }
+            if (!ok) onPliSearch()
+        }.semantics { contentDescription = if (google) "Recherche Google" else if (finder) "Finder" else "Rechercher" },
+            contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.Search, null, tint = Holo.Ink, modifier = Modifier.size(22.dp))
+        }
+        if (google) Box(Modifier.size(48.dp).clip(CircleShape).clickable {
+            start(Intent(android.speech.RecognizerIntent.ACTION_WEB_SEARCH).setPackage(GOOGLE_APP)) ||
+                start(Intent(android.speech.RecognizerIntent.ACTION_WEB_SEARCH))
+        }.semantics { contentDescription = "Recherche vocale Google" }, contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.Mic, null, tint = Holo.Violet, modifier = Modifier.size(22.dp))
+        }
+        if (finder) Text("Finder", color = Holo.Soft, fontSize = 13.sp, modifier = Modifier.padding(end = 16.dp))
     }
 }

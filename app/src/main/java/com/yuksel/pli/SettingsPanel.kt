@@ -131,7 +131,24 @@ fun SettingsPanel(
                 ToggleRow("Fond holographique", if (s.phoneWallpaper) "Ton fond d’écran du téléphone est utilisé" else "Noir profond avec halos de couleur",
                     !s.phoneWallpaper) { v -> launcher.updateSettings { it.copy(phoneWallpaper = !v) } }
                 ToggleRow("Halos animés", "Les couleurs bougent quand tu inclines le téléphone", s.parallax) { v -> launcher.updateSettings { it.copy(parallax = v) } }
-                ToggleRow("Icônes en bulles de verre", "Sinon, la forme d’origine des icônes", s.bubbles) { v -> launcher.updateSettings { it.copy(bubbles = v) } }
+                ToggleRow("Icônes dans un cadre de verre", "Sinon, l’icône seule dans la forme choisie", s.bubbles) { v -> launcher.updateSettings { it.copy(bubbles = v) } }
+                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+                    Text("Forme des icônes", color = Holo.Ink, fontSize = 15.sp)
+                    Row(Modifier.padding(top = 10.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        val sample = launcher.visibleApps.firstOrNull()
+                        ICON_SHAPES.forEach { (key, name) ->
+                            val on = s.iconShape == key
+                            Column(Modifier.clip(RoundedCornerShape(16.dp)).clickable { launcher.updateSettings { it.copy(iconShape = key) } }
+                                .then(if (on) Modifier.glass(RoundedCornerShape(16.dp), .12f) else Modifier).padding(8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally) {
+                                androidx.compose.runtime.CompositionLocalProvider(LocalIconShape provides key) {
+                                    if (sample != null) AppIcon(sample, 44.dp, showBadge = false)
+                                }
+                                Text(name, color = if (on) Holo.Violet else Holo.Soft, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                            }
+                        }
+                    }
+                }
                 ToggleRow("Noms des applis", null, s.labels) { v -> launcher.updateSettings { it.copy(labels = v) } }
             }
             Section("Icônes") {
@@ -174,6 +191,12 @@ fun SettingsPanel(
                     launcher.updateSettings { it.copy(recentInDock = v) } }
                 ChoiceRow("Applis dans le dock", "Jusqu’à 10 ; celles en plus n’apparaissent que dépliées", (s.dockSize..10).toList(), s.innerDockSize.coerceAtLeast(s.dockSize)) { v ->
                     launcher.updateSettings { it.copy(innerDockSize = v) } }
+            }
+            Section("À droite de l’horloge") {
+                val options = listOf("google" to "Recherche Google", "finder" to "Finder Samsung", "pli" to "Recherche Pli", "none" to "Rien")
+                Row(Modifier.padding(16.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    options.forEach { (key, name) -> PillButton(name, highlighted = s.headerSearch == key) { launcher.updateSettings { it.copy(headerSearch = key) } } }
+                }
             }
             Section("Accueil") {
                 ToggleRow("Verrouiller la disposition", "Empêche de déplacer ou retirer des icônes par erreur", s.lockLayout) { v ->

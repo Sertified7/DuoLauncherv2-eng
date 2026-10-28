@@ -89,8 +89,15 @@ class Launcher(private val context: Context) {
         }
     }
 
+    /** Keeps big folders' covered cells in step with the folders. */
+    private fun withSpans(l: HomeLayout): HomeLayout = Screen.entries.fold(l) { acc, screen ->
+        val grid = acc.grid(screen) ?: return@fold acc
+        val list = LayoutEdits.spans(acc.home(screen), grid, acc.folders)
+        if (list == acc.home(screen)) acc else acc.withHome(screen, list)
+    }
+
     fun update(transform: (HomeLayout) -> HomeLayout) {
-        val next = transform(layout)
+        val next = withSpans(transform(layout))
         if (next != layout) {
             val namesChanged = next.labels != layout.labels || next.icons != layout.icons
             layout = next; store.saveLayout(next)
@@ -132,6 +139,7 @@ class Launcher(private val context: Context) {
 
     /** The home slots of a screen; slots whose app can't be shown (hidden, or work profile paused) read as empty. */
     fun visibleHome(screen: Screen): List<String> = layout.home(screen).map { id ->
+        if (id == HomeLayout.COVERED) return@map id
         val shown = when {
             id == HomeLayout.EMPTY -> false
             HomeLayout.isFolder(id) -> layout.folders[id]?.apps?.any { it in byId && it !in layout.hidden } == true

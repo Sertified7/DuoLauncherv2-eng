@@ -229,7 +229,7 @@ fun PliApp(host: PliHost, signals: HostSignals) {
 
     BackHandler(selection.active) { selection.clear() }
     LaunchedEffect(launcher.settings.lockLayout) { if (launcher.settings.lockLayout) selection.clear() }
-    CompositionLocalProvider(LocalBubbles provides launcher.settings.bubbles, LocalBadges provides badges, LocalSelection provides selection) {
+    CompositionLocalProvider(LocalBubbles provides launcher.settings.bubbles, LocalIconShape provides launcher.settings.iconShape, LocalBadges provides badges, LocalSelection provides selection) {
         Box(Modifier.fillMaxSize()) {
             HoloBackground(launcher.settings.phoneWallpaper, launcher.settings.parallax)
             // Home ignores the keyboard so the grid never changes size while typing.
@@ -452,6 +452,7 @@ private fun CoverHome(host: PliHost, signals: HostSignals, today: TodayState, dr
                     Modifier.graphicsLayer { alpha = shown; translationX = (1f - shown) * widthPx }
                         .onSizeChanged { with(density) { headerHeight = it.height.toDp() + 10.dp } }
                         .padding(start = 22.dp, end = 22.dp, top = 10.dp), onWeather = {},
+                    trailing = if (launcher.settings.headerSearch != "none") ({ HeaderSearch(launcher.settings.headerSearch, actions.search) }) else null,
                     nowPlaying = nowPlaying, onOpenPlaying = { host.openPackage(it) })
             }
         }
@@ -482,7 +483,8 @@ private fun InnerHome(host: PliHost, signals: HostSignals, today: TodayState, dr
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Holo.Violet.copy(alpha = .35f), Color.Transparent))))
             Column(Modifier.weight(1f).fillMaxHeight()
                 .homeSwipes(swipesOn, { drag.source != null || pager.currentPage < lead }, { swipeUp(drag, actions) }, { swipeDown(host, actions, it) }, { up -> actions.gesture(if (up) launcher.settings.twoFingerUp else launcher.settings.twoFingerDown) })) {
-                ClockHeader(today, 66.sp, compact = true, Modifier.padding(start = 26.dp, end = 22.dp, top = 14.dp), onWeather = {})
+                ClockHeader(today, 66.sp, compact = true, Modifier.padding(start = 26.dp, end = 22.dp, top = 14.dp), onWeather = {},
+                    trailing = if (launcher.settings.headerSearch != "none") ({ HeaderSearch(launcher.settings.headerSearch, actions.search) }) else null)
                 Spacer(Modifier.height(16.dp))
                 BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                     val s = launcher.settings

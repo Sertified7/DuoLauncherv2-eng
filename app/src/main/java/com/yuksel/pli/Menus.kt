@@ -4,6 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -153,6 +154,17 @@ fun AppMenu(request: MenuRequest, launcher: Launcher, currentScreen: Screen, onD
                     }
                     Divider()
                     MenuRow(Icons.Rounded.DriveFileRenameOutline, "Renommer") { onRenameFolder(folder.id); onDismiss() }
+                    if (!locked) {
+                        Text("Taille sur l’accueil", color = Holo.Muted, fontSize = 12.sp, modifier = Modifier.padding(start = 14.dp, top = 6.dp))
+                        Row(Modifier.padding(horizontal = 8.dp, vertical = 8.dp).horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            FOLDER_SIZES.forEach { (w, h, label) ->
+                                PillButton(label, highlighted = folder.w == w && folder.h == h) {
+                                    launcher.edit("Taille du dossier") { LayoutEdits.setFolderSize(it, folder.id, w, h) }
+                                }
+                            }
+                        }
+                    }
                     if (!locked) MenuRow(Icons.Rounded.CallSplit, "Défaire le dossier") {
                         launcher.edit("Dossier défait") { l -> LayoutEdits.ungroup(l, (request.origin as? Origin.Home)?.screen ?: currentScreen, folder.id) }
                         onDismiss()
@@ -331,3 +343,7 @@ fun Modifier.onBounds(block: (Rect) -> Unit): Modifier = onGloballyPositioned { 
 
 fun Modifier.combinedClick(onClick: () -> Unit, onLongClick: () -> Unit): Modifier =
     combinedClickable(onClick = onClick, onLongClick = onLongClick)
+
+/** Folder sizes on the home page: columns × rows (0 columns = the whole width). */
+private val FOLDER_SIZES = listOf(Triple(1, 1, "Icône"), Triple(2, 1, "2×1"), Triple(2, 2, "2×2"), Triple(3, 2, "3×2"),
+    Triple(0, 1, "Largeur ×1"), Triple(0, 2, "Largeur ×2"), Triple(0, 3, "Largeur ×3"), Triple(0, 4, "Largeur ×4"))

@@ -27,6 +27,9 @@ data class PliSettings(
     val twoFingerDown: String = "notifications",
     val lockLayout: Boolean = false,
     val recentInDock: Int = 2,
+    val iconShape: String = "circle",
+    /** Right of the clock: "google", "finder", "pli" or "none". */
+    val headerSearch: String = "google",
 )
 
 /** Saves the layout, the settings and the quick note in private preferences. */
@@ -64,6 +67,8 @@ class Store(context: Context) {
         twoFingerDown = prefs.getString("twoFingerDown", "notifications") ?: "notifications",
         lockLayout = prefs.getBoolean("lockLayout", false),
         recentInDock = prefs.getInt("recentInDock", 2),
+        iconShape = prefs.getString("iconShape", "circle") ?: "circle",
+        headerSearch = prefs.getString("headerSearch", "google") ?: "google",
     )
 
     fun saveSettings(s: PliSettings) {
@@ -76,7 +81,8 @@ class Store(context: Context) {
             .putBoolean("swipeDownNotifications", s.swipeDownNotifications)
             .putString("iconPack", s.iconPack).putBoolean("tintedIcons", s.tintedIcons).putString("doubleTap", s.doubleTap)
             .putString("twoFingerUp", s.twoFingerUp).putString("twoFingerDown", s.twoFingerDown)
-            .putBoolean("lockLayout", s.lockLayout).putInt("recentInDock", s.recentInDock).apply()
+            .putBoolean("lockLayout", s.lockLayout).putInt("recentInDock", s.recentInDock)
+            .putString("iconShape", s.iconShape).putString("headerSearch", s.headerSearch).apply()
     }
 
     /** Everything Pli saved (layout, settings, note) as one JSON document. Android widgets are left out: they belong to this phone. */

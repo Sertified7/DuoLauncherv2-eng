@@ -138,6 +138,7 @@ class DragState {
     fun clear() { source = null; active = false; spot = null }
 
     var trashRect = Rect.Zero
+    var bigFolders: Set<String> = emptySet()
     /** True: icons can't be moved (layout locked). */
     var locked = false
     /** The app under the finger right now (for "swipe up on an icon"). */
@@ -157,6 +158,7 @@ class DragState {
             if (i >= homeSlots || !r.contains(p)) continue
             val id = homeIndexOf(i).orEmpty()
             if (id.isEmpty() || id == dragged) return DropSpot.Home(screen, i)
+            if (id in bigFolders) return if (folderDrag) DropSpot.Home(screen, i) else DropSpot.Into(screen, i)
             val iconCenter = Offset(r.center.x, r.top + iconPx / 2f)
             return if (!folderDrag && (p - iconCenter).getDistance() < iconPx * .38f) DropSpot.Into(screen, i)
             else DropSpot.Home(screen, i)
@@ -237,6 +239,7 @@ fun HomePages(
     val haptic = LocalHapticFeedback.current
     drag.screen = screen
     drag.homeSlots = (homePages + 1) * metrics.capacity
+    drag.bigFolders = launcher.layout.folders.values.filter { it.big }.map { it.id }.toSet()
     remember(metrics, homePages, screen) { drag.homeCells.clear(); 0 }
     drag.homeIds = items
     drag.pageCapacity = metrics.capacity
@@ -266,14 +269,21 @@ fun HomePages(
         if (page < pageOffset) { leadingPage?.invoke(page); return@HorizontalPager }
         val homePage = page - pageOffset
         val first = homePage * metrics.capacity
-        Column(Modifier.fillMaxSize().padding(start = 8.dp, end = 8.dp, top = topPadding)) {
-            for (row in 0 until metrics.rows) {
-                Row(Modifier.fillMaxWidth().height(metrics.cellHeight)) {
-                    for (col in 0 until metrics.columns) {
-                        val index = first + row * metrics.columns + col
-                        val id = items.getOrNull(index)?.takeIf { it.isNotEmpty() }
-                        Box(Modifier.weight(1f).fillMaxHeight()) {
-                            if (id == null) {
+        BoxWithConstraints(Modifier.fillMaxSize().padding(start = 8.dp, end = 8.dp, top = topPadding)) {
+            val cw = maxWidth / metrics.columns
+            val ch = metrics.cellHeight
+            for (row in 0 until metrics.rows) for (col in 0 until metrics.columns) {
+                val index = first + row * metrics.columns + col
+                val raw = items.getOrNull(index)
+                if (raw == HomeLayout.COVERED) continue
+                val id = raw?.takeIf { it.isNotEmpty() }
+                val folder = id?.let { launcher.layout.folders[it] }?.takeIf { it.big }
+                val w = if (folder == null) 1 else if (folder.w <= 0) metrics.columns - col else folder.w.coerceIn(1, metrics.columns - col)
+                val h = if (folder == null) 1 else folder.h.coerceIn(1, metrics.rows - row)
+                key(index) {
+                    Box(Modifier.offset(x = cw * col, y = ch * row).size(cw * w, ch * h)) {
+                        when {
+                            id == null -> {
                                 val target = drag.active && drag.spot.let { it is DropSpot.Home && it.screen == screen && it.index == index }
                                 Box(Modifier.fillMaxSize().onGloballyPositioned { drag.homeCells[index] = it.boundsInRoot() }
                                     .pointerInput(homePage) {
@@ -283,7 +293,10 @@ fun HomePages(
                                     if (target) Box(Modifier.padding(top = 4.dp).size(metrics.icon).halo(Holo.Violet.copy(alpha = .3f), 10.dp)
                                         .drawBehind { drawCircle(Brush.linearGradient(Holo.Iridescent), style = Stroke(2.dp.toPx())) })
                                 }
-                            } else HomeCell(id, index, screen, launcher, metrics.icon, labels, drag,
+                            }
+                            folder != null -> BigFolder(folder, index, screen, launcher, metrics.icon, drag, onOpenApp, onOpenFolder, onMenu, onCloseMenu,
+                                onDrop = { drag.source?.let { s -> drag.spot?.let { sp -> applyDrop(launcher, s, sp) } } })
+                            else -> HomeCell(id, index, screen, launcher, metrics.icon, labels, drag,
                                 onOpenApp, onOpenFolder, onMenu, onCloseMenu,
                                 onDrop = { drag.source?.let { s -> drag.spot?.let { sp -> applyDrop(launcher, s, sp) } } })
                         }
@@ -295,6 +308,64 @@ fun HomePages(
     // Keep the pager in range after icons are removed.
     LaunchedEffect(homePages, pager.pageCount) {
         if (pager.currentPage >= pager.pageCount) scope.launch { pager.scrollToPage(pager.pageCount - 1) }
+    }
+}
+
+/** A folder shown open on the home page (2×2, full width…): its apps open with one tap. */
+@Composable
+private fun BigFolder(
+    folder: Folder, index: Int, screen: Screen, launcher: Launcher, icon: Dp, drag: DragState,
+    onOpenApp: (AppInfo, Rect) -> Unit, onOpenFolder: (String) -> Unit,
+    onMenu: (String, Rect, DragSource) -> Unit, onCloseMenu: () -> Unit, onDrop: () -> Unit,
+) {
+    val haptic = LocalHapticFeedback.current
+    var bounds by remember { mutableStateOf(Rect.Zero) }
+    val source = DragSource.Home(screen, folder.id)
+    val selection = LocalSelection.current
+    val targeted = drag.active && drag.spot.let { it is DropSpot.Into && it.screen == screen && it.index == index }
+    val apps = launcher.folderApps(folder.id)
+    val shape = RoundedCornerShape(28.dp)
+    BoxWithConstraints(Modifier.fillMaxSize().padding(4.dp)
+        .onGloballyPositioned { bounds = it.boundsInRoot(); drag.homeCells[index] = bounds }
+        .halo(Holo.Violet.copy(alpha = if (targeted) .3f else .1f), 14.dp)
+        .glass(shape, if (targeted) .12f else .07f)
+        .dragSource(drag, source, { bounds.topLeft },
+            onHold = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                if (selection.active) selection.toggle(folder.id) else onMenu(folder.id, bounds, source)
+            }, onDragStarted = onCloseMenu, onDrop = onDrop)
+        .alpha(if (drag.active && drag.draggedId == folder.id) .25f else 1f)
+        .padding(horizontal = 10.dp, vertical = 8.dp)) {
+        val small = (icon * .78f).coerceAtMost(54.dp)
+        val cols = ((maxWidth) / (small + 22.dp)).toInt().coerceAtLeast(1)
+        val rows = ((maxHeight - 22.dp) / (small + 22.dp)).toInt().coerceAtLeast(1)
+        val capacity = cols * rows
+        val shown = if (apps.size > capacity) apps.take(capacity - 1) else apps
+        Column(Modifier.fillMaxSize()) {
+            Text(folder.title, color = Holo.Soft, fontSize = 12.sp, letterSpacing = 1.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { if (selection.active) selection.toggle(folder.id) else onOpenFolder(folder.id) }
+                    .padding(horizontal = 4.dp, vertical = 2.dp))
+            Spacer(Modifier.height(4.dp))
+            (shown.chunked(cols)).forEach { line ->
+                Row(Modifier.fillMaxWidth().weight(1f, fill = false)) {
+                    line.forEach { app ->
+                        var appBounds by remember { mutableStateOf(Rect.Zero) }
+                        Column(Modifier.weight(1f).onGloballyPositioned { appBounds = it.boundsInRoot() }
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable { if (selection.active) selection.toggle(folder.id) else onOpenApp(app, appBounds) }
+                            .padding(vertical = 3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            AppIcon(app, small)
+                            Text(app.label, color = Holo.Soft, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(top = 2.dp))
+                        }
+                    }
+                    repeat(cols - line.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+            if (apps.size > capacity) Text("+${apps.size - shown.size}", color = Holo.Violet, fontSize = 13.sp,
+                modifier = Modifier.align(Alignment.End).clip(RoundedCornerShape(10.dp)).clickable { onOpenFolder(folder.id) }.padding(6.dp))
+        }
+        if (selection.active) SelectMark(folder.id in selection.ids, Modifier.align(Alignment.TopEnd))
     }
 }
 

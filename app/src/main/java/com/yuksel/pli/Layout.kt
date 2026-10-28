@@ -6,7 +6,10 @@ import org.json.JSONObject
 /** The cover screen and the inner screen each keep their own home pages; the dock is shared. */
 enum class Screen { COVER, INNER }
 
-data class Folder(val id: String, val title: String, val apps: List<String>)
+/** A folder. [w] × [h] cells on the home page (w = 0: the whole width); bigger than 1×1 it shows its apps directly. */
+data class Folder(val id: String, val title: String, val apps: List<String>, val w: Int = 1, val h: Int = 1) {
+    val big get() = w != 1 || h != 1
+}
 
 /** A card in the "Aujourd'hui" column: a built-in widget or an Android widget. */
 data class TodayItem(val key: String, val kind: String, val widgetId: Int = -1, val height: Int = 0) {
@@ -19,7 +22,8 @@ data class TodayItem(val key: String, val kind: String, val widgetId: Int = -1, 
         const val BATTERY = "battery"
         const val NOTE = "note"
         const val MEDIA = "media"
-        val BUILT_IN = listOf(WEATHER, AGENDA, MEDIA, BATTERY, NOTE)
+        const val TOGGLES = "toggles"
+        val BUILT_IN = listOf(WEATHER, AGENDA, MEDIA, BATTERY, NOTE, TOGGLES)
     }
 }
 
@@ -66,7 +70,7 @@ data class HomeLayout(
 
     /** Every app id placed on this screen, including inside folders and the dock. */
     fun placedApps(screen: Screen): Set<String> = buildSet {
-        home(screen).forEach { if (isFolder(it)) folders[it]?.apps?.let(::addAll) else if (it != EMPTY) add(it) }
+        home(screen).forEach { if (isFolder(it)) folders[it]?.apps?.let(::addAll) else if (it != EMPTY && it != COVERED) add(it) }
         addAll(dock)
         if (screen == Screen.INNER) addAll(dockExtra)
     }
@@ -80,7 +84,7 @@ data class HomeLayout(
         coverGrid?.let { put("coverGrid", "${it.columns}x${it.rows}") }
         innerGrid?.let { put("innerGrid", "${it.columns}x${it.rows}") }
         put("folders", JSONArray().apply {
-            folders.values.forEach { put(JSONObject().put("id", it.id).put("title", it.title).put("apps", JSONArray(it.apps))) }
+            folders.values.forEach { put(JSONObject().put("id", it.id).put("title", it.title).put("apps", JSONArray(it.apps)).put("w", it.w).put("h", it.h)) }
         })
         put("today", JSONArray().apply {
             today.forEach { put(JSONObject().put("key", it.key).put("kind", it.kind).put("widgetId", it.widgetId).put("height", it.height)) }
@@ -93,6 +97,8 @@ data class HomeLayout(
     companion object {
         const val FOLDER_PREFIX = "folder:"
         const val EMPTY = ""
+        /** A cell taken by a big folder whose top-left corner is elsewhere. */
+        const val COVERED = "~"
         fun isFolder(id: String) = id.startsWith(FOLDER_PREFIX)
 
         fun fromJson(json: JSONObject): HomeLayout {
@@ -103,7 +109,7 @@ data class HomeLayout(
             val folders = json.optJSONArray("folders")?.let { a ->
                 (0 until a.length()).mapNotNull { i -> a.optJSONObject(i) }.map { o ->
                     val apps = o.optJSONArray("apps")?.let { x -> List(x.length()) { x.optString(it) } } ?: emptyList()
-                    Folder(o.optString("id"), o.optString("title", "Dossier"), apps)
+                    Folder(o.optString("id"), o.optString("title", "Dossier"), apps, o.optInt("w", 1), o.optInt("h", 1))
                 }.associateBy { it.id }
             } ?: emptyMap()
             val today = json.optJSONArray("today")?.let { a ->
@@ -159,10 +165,60 @@ object LayoutEdits {
         while (out.size < at) out += EMPTY
         if (at == out.size) { out += id; return out }
         if (out[at] == EMPTY) { out[at] = id; return out }
-        out.add(at, id)
         val hole = (at + 1 until out.size).firstOrNull { out[it] == EMPTY }
-        if (hole != null) out.removeAt(hole)
+        // Never push the cells of a big folder: use the next free cell instead.
+        if (out[at] == COVERED || (at until (hole ?: out.size)).any { out[it] == COVERED }) {
+            val free = firstFree(out, at)
+            while (out.size < free) out += EMPTY
+            if (free == out.size) out += id else out[free] = id
+            return out
+        }
+        out.add(at, id)
+        if (hole != null) out.removeAt(hole + 1)
         return out
+    }
+
+    private const val COVERED = HomeLayout.COVERED
+
+    /** Size of a folder on the home page, in cells. */
+    fun setFolderSize(layout: HomeLayout, folderId: String, w: Int, h: Int): HomeLayout {
+        val f = layout.folders[folderId] ?: return layout
+        return layout.copy(folders = layout.folders + (folderId to f.copy(w = w, h = h)))
+    }
+
+    /**
+     * Marks the cells big folders cover, keeping each folder inside its page; icons in the way move to free cells.
+     * Run after every change, so the marks always match the folders.
+     */
+    fun spans(list: List<String>, grid: Grid, folders: Map<String, Folder>): List<String> {
+        val out = list.map { if (it == COVERED) EMPTY else it }.toMutableList()
+        val cap = grid.capacity
+        val reserved = HashSet<Int>()
+        val displaced = ArrayList<String>()
+        val anchors = out.withIndex().filter { (_, id) -> folders[id]?.big == true }.map { it.index to it.value }
+        for ((index, id) in anchors) {
+            val f = folders[id] ?: continue
+            if (out.getOrNull(index) != id) continue
+            val page = index / cap; val cell = index % cap
+            val w = if (f.w <= 0) grid.columns else f.w.coerceIn(1, grid.columns)
+            val h = f.h.coerceIn(1, grid.rows)
+            val col = (cell % grid.columns).coerceAtMost(grid.columns - w)
+            val row = (cell / grid.columns).coerceAtMost(grid.rows - h)
+            val cells = (0 until h).flatMap { dy -> (0 until w).map { dx -> page * cap + (row + dy) * grid.columns + col + dx } }
+            if (cells.any { it in reserved }) continue
+            val anchor = cells.first()
+            out[index] = EMPTY
+            while (out.size <= cells.last()) out += EMPTY
+            cells.forEach { c ->
+                val there = out[c]
+                if (there != EMPTY && there != id) displaced += there
+                out[c] = if (c == anchor) id else COVERED
+            }
+            reserved += cells
+        }
+        var result: List<String> = out
+        displaced.forEach { result = place(result, firstFree(result), it) }
+        return result.dropLastWhile { it == EMPTY }
     }
 
     /** First empty slot at or after [from], else the end. */
@@ -350,7 +406,7 @@ object LayoutEdits {
         val out = ArrayList<String>()
         val overflow = ArrayList<String>()
         list.forEachIndexed { i, id ->
-            if (id == EMPTY) return@forEachIndexed
+            if (id == EMPTY || id == COVERED) return@forEachIndexed
             val page = i / old.capacity; val cell = i % old.capacity
             val row = cell / old.columns; val col = cell % old.columns
             if (row < new.rows && col < new.columns) {
@@ -381,6 +437,7 @@ object LayoutEdits {
             return list.map { id ->
                 val kept = when {
                     id == EMPTY -> EMPTY
+                    id == COVERED -> return@map COVERED
                     HomeLayout.isFolder(id) -> {
                         val f = folders[id]
                         when {
