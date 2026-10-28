@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -67,6 +68,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import kotlin.math.abs
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
@@ -244,14 +252,15 @@ fun SearchPanel(launcher: Launcher, modifier: Modifier, onOpen: (AppInfo, Rect?)
         val first = matches.firstOrNull()
         if (first != null) onOpen(first, null) else if (query.isNotBlank()) { webSearch(context, query); onClose() }
     }
-    Column(modifier) {
+    val list = rememberLazyListState()
+    Column(modifier.swipeDownToClose({ list.firstVisibleItemIndex == 0 && list.firstVisibleItemScrollOffset == 0 }) { keyboard?.hide(); onClose() }) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             GlassField(query, { query = it }, "Rechercher", focus, Modifier.weight(1f), onDone = ::launchFirst)
             Text("Annuler", color = Holo.Violet, fontSize = 14.sp, modifier = Modifier.padding(start = 12.dp).clip(RoundedCornerShape(12.dp))
                 .clickable(onClick = onClose).padding(8.dp))
         }
         Spacer(Modifier.height(16.dp))
-        LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyColumn(Modifier.fillMaxSize(), list, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (calc != null) item {
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp))
                     .background(Brush.linearGradient(Holo.Iridescent.map { it.copy(alpha = .2f) }))
@@ -316,7 +325,7 @@ fun AppDrawer(launcher: Launcher, modifier: Modifier, onOpen: (AppInfo, Rect) ->
     val apps = launcher.visibleApps
     val shown = remember(filter, apps) { if (filter.isBlank()) apps else matchApps(apps, filter) }
     val grid = rememberLazyGridState()
-    Column(modifier) {
+    Column(modifier.swipeDownToClose({ grid.firstVisibleItemIndex == 0 && grid.firstVisibleItemScrollOffset == 0 }, onClose)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IridescentText("Applis", 30.sp, Modifier.weight(1f), letterSpacing = (-.5).sp)
             Text("${apps.size}", color = Holo.Muted, fontSize = 13.sp, modifier = Modifier.padding(end = 12.dp))
@@ -331,3 +340,27 @@ fun AppDrawer(launcher: Launcher, modifier: Modifier, onOpen: (AppInfo, Rect) ->
         }
     }
 }
+
+/**
+ * Closes a panel with a downward swipe when its list is scrolled to the top.
+ * Upward swipes and swipes inside a scrolled list are left alone.
+ */
+fun Modifier.swipeDownToClose(atTop: () -> Boolean, onClose: () -> Unit): Modifier =
+    pointerInput(Unit) {
+        val threshold = 64.dp.toPx()
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            if (!atTop()) return@awaitEachGesture
+            var total = Offset.Zero
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                if (!change.pressed) break
+                total += change.positionChange()
+                if (total.y < -12f || abs(total.x) > threshold) break
+                if (total.y > threshold && total.y > abs(total.x) * 1.3f) {
+                    change.consume(); onClose(); break
+                }
+            }
+        }
+    }
