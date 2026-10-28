@@ -23,6 +23,22 @@ class MainActivity : ComponentActivity(), PliHost {
     private val signals = HostSignals()
 
     private val permission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { signals.resumes++ }
+    private val exportFile = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) {
+            val ok = runCatching {
+                contentResolver.openOutputStream(uri)?.use { it.write(launcher.store.export().toString(2).toByteArray()) } != null
+            }.getOrDefault(false)
+            toast(if (ok) "Disposition exportée" else "Export impossible")
+        }
+    }
+    private val importFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) lifecycleScope.launch {
+            val json = runCatching { contentResolver.openInputStream(uri)?.use { org.json.JSONObject(it.bufferedReader().readText()) } }.getOrNull()
+            val ok = json != null && launcher.store.import(json, launcher.layout.today.filter { it.isAndroid })
+            if (ok) launcher.reloadAll()
+            toast(if (ok) "Disposition importée" else "Ce fichier n’est pas une sauvegarde Pli")
+        }
+    }
     private val defaultHome = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { refreshDefaultHome() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -132,6 +148,21 @@ class MainActivity : ComponentActivity(), PliHost {
         val intent = packageManager.getLaunchIntentForPackage(GOOGLE) ?: return
         val options = ActivityOptions.makeCustomAnimation(this, android.R.anim.slide_in_left, android.R.anim.fade_out).toBundle()
         runCatching { startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), options) }
+    }
+
+    private fun toast(text: String) = android.widget.Toast.makeText(this, text, android.widget.Toast.LENGTH_SHORT).show()
+
+    override fun openAccessibilitySettings() {
+        toast("Active « Pli – verrouillage par geste »")
+        runCatching { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+    }
+
+    override fun exportBackup() {
+        exportFile.launch("pli-disposition-" + java.time.LocalDate.now() + ".json")
+    }
+
+    override fun importBackup() {
+        importFile.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
     }
 
     override fun expandNotifications() {

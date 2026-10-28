@@ -22,6 +22,12 @@ class Launcher(private val context: Context) {
     var layout by mutableStateOf(HomeLayout()); private set
     var settings by mutableStateOf(PliSettings()); private set
     var loaded by mutableStateOf(false); private set
+    /** Bumped when the icon look changes so the UI reloads the apps. */
+    var iconReloads by mutableStateOf(0); private set
+    /** The last app opened from Pli, and on which screen, for "Continuer" after folding or unfolding. */
+    var lastLaunch by mutableStateOf<Triple<String, Screen, Long>?>(null); private set
+
+    private fun iconStyle() = AppRepository.IconStyle(settings.iconPack, settings.tintedIcons)
 
     /** Apps the user did not hide, sorted by name. */
     val visibleApps get() = apps.filter { it.id !in layout.hidden }
@@ -39,7 +45,7 @@ class Launcher(private val context: Context) {
     }
 
     suspend fun reloadApps(removedPackage: String? = null, addedPackage: String? = null) {
-        val list = repository.load()
+        val list = repository.load(iconStyle())
         apps = list
         byId = list.associateBy { it.id }
         if (removedPackage != null) {
@@ -64,9 +70,11 @@ class Launcher(private val context: Context) {
 
     fun updateSettings(transform: (PliSettings) -> PliSettings) {
         val next = transform(settings)
+        val old = settings
         val resize = next.dockSize != settings.dockSize || next.innerDockSize != settings.innerDockSize
         settings = next; store.saveSettings(next)
         if (resize) update { LayoutEdits.resizeDock(it, dockSizes) }
+        if (next.iconPack != old.iconPack || next.tintedIcons != old.tintedIcons) iconReloads++
     }
 
     /** Home entries that can be shown right now (known, not hidden; folders with visible apps). */
@@ -88,7 +96,19 @@ class Launcher(private val context: Context) {
 
     fun unhide(id: String) = update { it.copy(hidden = it.hidden - id) }
 
-    fun recordLaunch(app: AppInfo) = UsageLog.record(context, app.id)
+    fun recordLaunch(app: AppInfo, screen: Screen) {
+        UsageLog.record(context, app.id)
+        lastLaunch = Triple(app.id, screen, System.currentTimeMillis())
+    }
+
+    fun forgetLastLaunch() { lastLaunch = null }
+
+    /** Reloads everything after a backup was imported. */
+    suspend fun reloadAll() {
+        settings = store.loadSettings()
+        layout = store.loadLayout()
+        reloadApps()
+    }
 
     // ---------- First run ----------
 

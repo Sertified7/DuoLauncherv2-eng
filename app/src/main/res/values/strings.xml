@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Pli</string>
+    <string name="accessibility_label">Pli – verrouillage par geste</string>
+    <string name="accessibility_description">Permet à Pli de verrouiller l’écran quand tu fais le geste choisi (par exemple un double appui sur l’accueil). Pli ne lit pas le contenu de l’écran.</string>
 </resources>

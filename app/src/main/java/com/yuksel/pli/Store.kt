@@ -20,6 +20,11 @@ data class PliSettings(
     val latitude: Double? = null,
     val longitude: Double? = null,
     val swipeDownNotifications: Boolean = true,
+    val iconPack: String = "",
+    val tintedIcons: Boolean = false,
+    val doubleTap: String = "lock",
+    val twoFingerUp: String = "none",
+    val twoFingerDown: String = "notifications",
 )
 
 /** Saves the layout, the settings and the quick note in private preferences. */
@@ -50,6 +55,11 @@ class Store(context: Context) {
         latitude = prefs.getString("lat", null)?.toDoubleOrNull(),
         longitude = prefs.getString("lon", null)?.toDoubleOrNull(),
         swipeDownNotifications = prefs.getBoolean("swipeDownNotifications", true),
+        iconPack = prefs.getString("iconPack", "") ?: "",
+        tintedIcons = prefs.getBoolean("tintedIcons", false),
+        doubleTap = prefs.getString("doubleTap", "lock") ?: "lock",
+        twoFingerUp = prefs.getString("twoFingerUp", "none") ?: "none",
+        twoFingerDown = prefs.getString("twoFingerDown", "notifications") ?: "notifications",
     )
 
     fun saveSettings(s: PliSettings) {
@@ -59,7 +69,41 @@ class Store(context: Context) {
             .putInt("innerColumns", s.innerColumns).putInt("innerRows", s.innerRows).putBoolean("discover", s.discover)
             .putBoolean("addNewApps", s.addNewApps).putString("city", s.city)
             .putString("lat", s.latitude?.toString()).putString("lon", s.longitude?.toString())
-            .putBoolean("swipeDownNotifications", s.swipeDownNotifications).apply()
+            .putBoolean("swipeDownNotifications", s.swipeDownNotifications)
+            .putString("iconPack", s.iconPack).putBoolean("tintedIcons", s.tintedIcons).putString("doubleTap", s.doubleTap)
+            .putString("twoFingerUp", s.twoFingerUp).putString("twoFingerDown", s.twoFingerDown).apply()
+    }
+
+    /** Everything Pli saved (layout, settings, note) as one JSON document. Android widgets are left out: they belong to this phone. */
+    fun export(): JSONObject {
+        val layout = loadLayout()
+        return JSONObject().put("app", "Pli").put("version", 1)
+            .put("layout", layout.copy(today = layout.today.filterNot { it.isAndroid }).toJson())
+            .put("settings", JSONObject().apply {
+                prefs.all.forEach { (key, value) -> if (key != "layout" && key != "note" && value != null) put(key, value) }
+            })
+            .put("note", note)
+    }
+
+    /** Restores a document from [export]. Returns false when it is not a Pli backup. */
+    fun import(json: JSONObject, keepAndroidWidgets: List<TodayItem>): Boolean {
+        if (json.optString("app") != "Pli") return false
+        val layout = HomeLayout.fromJson(json.optJSONObject("layout") ?: return false)
+        val settings = json.optJSONObject("settings") ?: JSONObject()
+        val edit = prefs.edit()
+        settings.keys().forEach { key ->
+            when (val v = settings.get(key)) {
+                is Boolean -> edit.putBoolean(key, v)
+                is Int -> edit.putInt(key, v)
+                is Long -> edit.putInt(key, v.toInt())
+                is Double -> edit.putString(key, v.toString())
+                is String -> edit.putString(key, v)
+            }
+        }
+        edit.putString("layout", layout.copy(today = layout.today.filterNot { it.isAndroid } + keepAndroidWidgets).toJson().toString())
+        edit.putString("note", json.optString("note", note))
+        edit.apply()
+        return true
     }
 
     var note: String

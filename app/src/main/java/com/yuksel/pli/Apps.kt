@@ -45,11 +45,22 @@ class AppRepository(private val context: Context) {
     private val iconSize = (context.resources.displayMetrics.density * 72).toInt().coerceIn(96, 256)
     private val iconCache = HashMap<String, ImageBitmap>()
     private var callback: LauncherApps.Callback? = null
+    private var styleKey = ""
+    private var pack: IconPacks.Pack? = null
+
+    /** Icon look: an icon pack (package name, or empty) and/or monochrome tinting. */
+    data class IconStyle(val pack: String = "", val tinted: Boolean = false)
 
     fun idOf(component: ComponentName, user: UserHandle): String =
         component.flattenToShortString() + "#" + userManager.getSerialNumberForUser(user)
 
-    suspend fun load(): List<AppInfo> = withContext(Dispatchers.IO) {
+    suspend fun load(style: IconStyle = IconStyle()): List<AppInfo> = withContext(Dispatchers.IO) {
+        val key = style.toString()
+        if (key != styleKey) {
+            synchronized(iconCache) { iconCache.clear() }
+            pack = style.pack.takeIf { it.isNotEmpty() }?.let { IconPacks.load(context, it) }
+            styleKey = key
+        }
         val mainUser = android.os.Process.myUserHandle()
         val collator = Collator.getInstance(Locale.FRANCE).apply { strength = Collator.PRIMARY }
         val result = ArrayList<AppInfo>()
@@ -58,17 +69,24 @@ class AppRepository(private val context: Context) {
             val list = runCatching { launcherApps.getActivityList(null, user) }.getOrNull() ?: continue
             for (info in list) {
                 if (info.componentName.packageName == context.packageName) continue
-                result += toApp(info, user, user != mainUser)
+                result += toApp(info, user, user != mainUser, style.tinted)
             }
         }
         result.sortedWith { a, b -> collator.compare(a.label, b.label) }
     }
 
-    private fun toApp(info: LauncherActivityInfo, user: UserHandle, work: Boolean): AppInfo {
+    private fun toApp(info: LauncherActivityInfo, user: UserHandle, work: Boolean, tinted: Boolean): AppInfo {
         val id = idOf(info.componentName, user)
         val icon = synchronized(iconCache) { iconCache[id] } ?: run {
+            val dpi = context.resources.displayMetrics.densityDpi
             val bitmap = runCatching {
-                info.getBadgedIcon(context.resources.displayMetrics.densityDpi).toBitmap(iconSize, iconSize, Bitmap.Config.ARGB_8888)
+                val packed = pack?.icon(info.componentName, dpi)
+                val drawable = packed ?: info.getIcon(dpi)
+                val base = if (tinted && packed == null) IconPacks.tinted(drawable, iconSize, TINTS[(id.hashCode() and 0x7fffffff) % TINTS.size])
+                    else drawable.toBitmap(iconSize, iconSize, Bitmap.Config.ARGB_8888)
+                // Keep the work badge visible on work apps.
+                if (work) context.packageManager.getUserBadgedIcon(android.graphics.drawable.BitmapDrawable(context.resources, base), user)
+                    .toBitmap(iconSize, iconSize, Bitmap.Config.ARGB_8888) else base
             }.getOrElse { Bitmap.createBitmap(iconSize, iconSize, Bitmap.Config.ARGB_8888) }.asImageBitmap()
             synchronized(iconCache) { iconCache[id] = bitmap }
             bitmap
@@ -109,7 +127,10 @@ class AppRepository(private val context: Context) {
         launcherApps.startAppDetailsActivity(app.component, app.user, null, null)
     }.isSuccess
 
-    companion object { const val ADDED = 1; const val REMOVED = -1; const val CHANGED = 0 }
+    companion object {
+        const val ADDED = 1; const val REMOVED = -1; const val CHANGED = 0
+        private val TINTS = intArrayOf(0xFF9BE7FF.toInt(), 0xFFC7A6FF.toInt(), 0xFFFFB3D9.toInt(), 0xFF9BFFD8.toInt())
+    }
 
     fun uninstall(app: AppInfo) = runCatching {
         context.startActivity(Intent(Intent.ACTION_DELETE, android.net.Uri.parse("package:${app.packageName}"))

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -97,8 +98,23 @@ fun SettingsPanel(
     launcher: Launcher, isDefaultHome: Boolean, badgesAllowed: Boolean, modifier: Modifier,
     onClose: () -> Unit, onMakeDefault: () -> Unit, onNotificationAccess: () -> Unit, onLocation: () -> Unit,
     onWeatherChanged: () -> Unit,
+    onExport: () -> Unit = {}, onImport: () -> Unit = {}, accessibilityOn: Boolean = false, onAccessibility: () -> Unit = {},
 ) {
     val s = launcher.settings
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val packs = remember { IconPacks.installed(context) }
+    var picking by remember { mutableStateOf<String?>(null) }
+    picking?.let { which ->
+        AppPick(launcher, Modifier.fillMaxSize(), onClose = { picking = null }) { app ->
+            launcher.updateSettings { when (which) {
+                "doubleTap" -> it.copy(doubleTap = "app:${app.id}")
+                "twoFingerUp" -> it.copy(twoFingerUp = "app:${app.id}")
+                else -> it.copy(twoFingerDown = "app:${app.id}")
+            } }
+            picking = null
+        }
+        return
+    }
     val scope = rememberCoroutineScope()
     var city by remember { mutableStateOf(s.city) }
     var cityStatus by remember { mutableStateOf<String?>(null) }
@@ -117,6 +133,33 @@ fun SettingsPanel(
                 ToggleRow("Halos animés", "Les couleurs bougent quand tu inclines le téléphone", s.parallax) { v -> launcher.updateSettings { it.copy(parallax = v) } }
                 ToggleRow("Icônes en bulles de verre", "Sinon, la forme d’origine des icônes", s.bubbles) { v -> launcher.updateSettings { it.copy(bubbles = v) } }
                 ToggleRow("Noms des applis", null, s.labels) { v -> launcher.updateSettings { it.copy(labels = v) } }
+            }
+            Section("Icônes") {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+                    Text("Pack d’icônes", color = Holo.Ink, fontSize = 15.sp)
+                    Text(if (packs.isEmpty()) "Installe un pack d’icônes depuis le Play Store (format Nova / ADW)" else "Les applis absentes du pack gardent leur icône",
+                        color = Holo.Muted, fontSize = 12.sp)
+                    Row(Modifier.padding(top = 8.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        (listOf(IconPackInfo("", "Aucun")) + packs).forEach { p ->
+                            val on = s.iconPack == p.packageName
+                            Box(Modifier.height(38.dp).clip(RoundedCornerShape(50))
+                                .then(if (on) Modifier.background(Brush.linearGradient(Holo.Iridescent), RoundedCornerShape(50)) else Modifier.glass(RoundedCornerShape(50)))
+                                .clickable { launcher.updateSettings { it.copy(iconPack = p.packageName) } }.padding(horizontal = 14.dp),
+                                contentAlignment = Alignment.Center) {
+                                Text(p.label, color = if (on) Color(0xFF120A22) else Holo.Soft, fontSize = 14.sp, maxLines = 1)
+                            }
+                        }
+                    }
+                }
+                ToggleRow("Icônes teintées", "Monochromes aux couleurs holographiques (icônes thématiques Android)", s.tintedIcons) { v ->
+                    launcher.updateSettings { it.copy(tintedIcons = v) } }
+            }
+            Section("Gestes") {
+                GestureRow("Double appui sur un espace vide", s.doubleTap, launcher, onPick = { picking = "doubleTap" }) { v -> launcher.updateSettings { it.copy(doubleTap = v) } }
+                GestureRow("Glisser à deux doigts vers le haut", s.twoFingerUp, launcher, onPick = { picking = "twoFingerUp" }) { v -> launcher.updateSettings { it.copy(twoFingerUp = v) } }
+                GestureRow("Glisser à deux doigts vers le bas", s.twoFingerDown, launcher, onPick = { picking = "twoFingerDown" }) { v -> launcher.updateSettings { it.copy(twoFingerDown = v) } }
+                if (listOf(s.doubleTap, s.twoFingerUp, s.twoFingerDown).contains("lock") && !accessibilityOn)
+                    ActionRow("Verrouiller demande une autorisation", "Active « Pli – verrouillage par geste » dans Accessibilité", "Activer", onAccessibility)
             }
             Section("Écran externe") {
                 ChoiceRow("Colonnes", null, listOf(0, 3, 4, 5, 6), s.coverColumns) { v -> launcher.updateSettings { it.copy(coverColumns = v) } }
@@ -172,6 +215,10 @@ fun SettingsPanel(
                 }
             }
             val hidden = launcher.layout.hidden.toList()
+            Section("Sauvegarde") {
+                ActionRow("Exporter ma disposition", "Pages, dossiers, dock, widgets Pli et réglages dans un fichier", "Exporter", onExport)
+                ActionRow("Importer une disposition", "Remplace la disposition actuelle", "Importer", onImport)
+            }
             Section("Applis masquées") {
                 if (hidden.isEmpty()) Text("Aucune. Maintiens une appli puis « Masquer l’appli ».", color = Holo.Muted, fontSize = 13.sp,
                     modifier = Modifier.padding(16.dp))
@@ -188,6 +235,51 @@ fun SettingsPanel(
             Text("Pli · launcher holographique pour Galaxy Z Fold", color = Holo.Muted, fontSize = 12.sp,
                 modifier = Modifier.padding(start = 6.dp))
             Spacer(Modifier.height(30.dp))
+        }
+    }
+}
+
+private val GESTURE_ACTIONS = listOf("none" to "Rien", "lock" to "Verrouiller", "notifications" to "Notifications",
+    "search" to "Recherche", "drawer" to "Toutes les applis")
+
+@Composable
+private fun GestureRow(title: String, value: String, launcher: Launcher, onPick: () -> Unit, onSelect: (String) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+        Text(title, color = Holo.Ink, fontSize = 15.sp)
+        Row(Modifier.padding(top = 8.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            val app = if (value.startsWith("app:")) launcher.byId[value.removePrefix("app:")] else null
+            (GESTURE_ACTIONS + ("app" to (app?.label ?: "Ouvrir une appli…"))).forEach { (key, label) ->
+                val on = value == key || (key == "app" && value.startsWith("app:"))
+                Box(Modifier.height(38.dp).clip(RoundedCornerShape(50))
+                    .then(if (on) Modifier.background(Brush.linearGradient(Holo.Iridescent), RoundedCornerShape(50)) else Modifier.glass(RoundedCornerShape(50)))
+                    .clickable { if (key == "app") onPick() else onSelect(key) }.padding(horizontal = 14.dp),
+                    contentAlignment = Alignment.Center) {
+                    Text(label, color = if (on) Color(0xFF120A22) else Holo.Soft, fontSize = 14.sp, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppPick(launcher: Launcher, modifier: Modifier, onClose: () -> Unit, onPick: (AppInfo) -> Unit) {
+    var filter by remember { mutableStateOf("") }
+    val apps = launcher.visibleApps
+    val shown = remember(filter, apps) { if (filter.isBlank()) apps else matchApps(apps, filter) }
+    Column(modifier) {
+        Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            IridescentText("Choisir une appli", 26.sp, Modifier.weight(1f), letterSpacing = 0.sp)
+            PillButton("Retour", onClick = onClose)
+        }
+        GlassField(filter, { filter = it }, "Filtrer", null, Modifier.fillMaxWidth())
+        Column(Modifier.padding(top = 10.dp).verticalScroll(rememberScrollState())) {
+            shown.forEach { app ->
+                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(18.dp)).clickable { onPick(app) }
+                    .padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    AppIcon(app, 40.dp, showBadge = false)
+                    Text(app.label, color = Holo.Ink, fontSize = 15.sp, modifier = Modifier.padding(start = 14.dp))
+                }
+            }
         }
     }
 }

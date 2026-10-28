@@ -12,6 +12,11 @@
     <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
     <queries>
         <package android:name="com.google.android.googlequicksearchbox" />
+        <intent><action android:name="org.adw.launcher.THEMES" /></intent>
+        <intent><action android:name="com.novalauncher.THEME" /></intent>
+        <intent><action android:name="com.gau.go.launcherex.theme" /></intent>
+        <intent><action android:name="com.teslacoilsw.launcher.THEME" /></intent>
+        <intent><action android:name="com.anddoes.launcher.THEME" /></intent>
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
@@ -54,6 +59,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <service android:name=".PliAccessibility" android:exported="true"
+            android:label="@string/accessibility_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/pli_accessibility" />
+        </service>
         <service android:name=".BadgeService" android:exported="false"
             android:label="Pastilles Pli"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">

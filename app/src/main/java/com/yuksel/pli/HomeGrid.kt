@@ -187,6 +187,7 @@ fun HomePages(
     drag: DragState, labels: Boolean, modifier: Modifier,
     onOpenApp: (AppInfo, Rect) -> Unit, onOpenFolder: (String) -> Unit,
     onMenu: (String, Rect, DragSource) -> Unit, onCloseMenu: () -> Unit, onEmptyHold: () -> Unit,
+    onEmptyDoubleTap: () -> Unit = {},
     leadingPage: (@Composable (Int) -> Unit)? = null,
 ) {
     val homePages = maxOf(1, (items.size + metrics.capacity - 1) / metrics.capacity)
@@ -230,7 +231,8 @@ fun HomePages(
                         val id = items.getOrNull(index)
                         Box(Modifier.weight(1f).fillMaxHeight()) {
                             if (id == null) Box(Modifier.fillMaxSize().pointerInput(Unit) {
-                                detectTapGestures(onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEmptyHold() })
+                                detectTapGestures(onDoubleTap = { onEmptyDoubleTap() },
+                                    onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEmptyHold() })
                             }) else HomeCell(id, index, screen, launcher, metrics.icon, labels, drag,
                                 onOpenApp, onOpenFolder, onMenu, onCloseMenu,
                                 onDrop = { drag.source?.let { s -> drag.spot?.let { sp -> applyDrop(launcher, s, sp, drag.homeIds) } } })
