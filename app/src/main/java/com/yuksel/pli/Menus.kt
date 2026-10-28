@@ -285,7 +285,7 @@ fun HomeMenu(onDismiss: () -> Unit, onWidgets: (() -> Unit)?, onSettings: () -> 
         Scrim(.35f, onDismiss)
         Anchored(Rect.Zero) {
             MenuCard {
-                Text("Pli", color = Holo.Muted, fontSize = 12.sp, letterSpacing = 2.sp, modifier = Modifier.padding(10.dp))
+                Text("Fold Launcher Pro", color = Holo.Muted, fontSize = 12.sp, letterSpacing = 2.sp, modifier = Modifier.padding(10.dp))
                 if (!locked) {
                     MenuRow(Icons.Rounded.AddToHomeScreen, "Ajouter des applis") { onDismiss(); onAddApps() }
                     MenuRow(Icons.Rounded.Checklist, "Sélectionner des applis") { onDismiss(); onSelect() }
@@ -299,7 +299,7 @@ fun HomeMenu(onDismiss: () -> Unit, onWidgets: (() -> Unit)?, onSettings: () -> 
                 if (onWidgets != null) MenuRow(Icons.Rounded.Widgets, "Ajouter un widget") { onDismiss(); onWidgets() }
                 if (onToday != null) MenuRow(Icons.Rounded.ViewDay, "Modifier « Aujourd’hui »") { onDismiss(); onToday() }
                 MenuRow(Icons.Rounded.Apps, "Toutes les applis") { onDismiss(); onApps() }
-                MenuRow(Icons.Rounded.Tune, "Réglages de Pli") { onDismiss(); onSettings() }
+                MenuRow(Icons.Rounded.Tune, "Réglages de Fold Launcher Pro") { onDismiss(); onSettings() }
             }
         }
     }

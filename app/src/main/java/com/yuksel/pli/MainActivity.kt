@@ -36,7 +36,7 @@ class MainActivity : ComponentActivity(), PliHost {
             val json = runCatching { contentResolver.openInputStream(uri)?.use { org.json.JSONObject(it.bufferedReader().readText()) } }.getOrNull()
             val ok = json != null && launcher.store.import(json, launcher.layout.today.filter { it.isAndroid })
             if (ok) launcher.reloadAll()
-            toast(if (ok) "Disposition importée" else "Ce fichier n’est pas une sauvegarde Pli")
+            toast(if (ok) "Disposition importée" else "Ce fichier n’est pas une sauvegarde Fold Launcher Pro")
         }
     }
     private var imageCallback: ((android.net.Uri) -> Unit)? = null
@@ -160,12 +160,12 @@ class MainActivity : ComponentActivity(), PliHost {
     private fun toast(text: String) = android.widget.Toast.makeText(this, text, android.widget.Toast.LENGTH_SHORT).show()
 
     override fun openAccessibilitySettings() {
-        toast("Active « Pli – verrouillage par geste »")
+        toast("Active « Fold Launcher Pro – verrouillage par geste »")
         runCatching { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
     }
 
     override fun exportBackup() {
-        exportFile.launch("pli-disposition-" + java.time.LocalDate.now() + ".json")
+        exportFile.launch("fold-launcher-pro-disposition-" + java.time.LocalDate.now() + ".json")
     }
 
     override fun importBackup() {
@@ -193,7 +193,7 @@ class MainActivity : ComponentActivity(), PliHost {
     override fun authenticate(title: String, onSuccess: () -> Unit) {
         val prompt = android.hardware.biometrics.BiometricPrompt.Builder(this)
             .setTitle(title)
-            .setSubtitle("Appli protégée dans Pli")
+            .setSubtitle("Appli protégée dans Fold Launcher Pro")
             .setAllowedAuthenticators(android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_WEAK or
                 android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDENTIAL)
             .build()

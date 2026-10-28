@@ -1,4 +1,4 @@
-name: Build Pli APK
+name: Build Fold Launcher Pro APK
 
 on:
   push:
@@ -38,16 +38,16 @@ jobs:
           done
           true
       - name: Rename APK
-        run: cp app/build/outputs/apk/release/app-release.apk "Pli-${{ github.run_number }}.apk"
+        run: cp app/build/outputs/apk/release/app-release.apk "FoldLauncherPro-${{ github.run_number }}.apk"
       - uses: actions/upload-artifact@v4
         with:
-          name: Pli-${{ github.run_number }}
-          path: Pli-${{ github.run_number }}.apk
+          name: FoldLauncherPro-${{ github.run_number }}
+          path: FoldLauncherPro-${{ github.run_number }}.apk
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "pli-${{ github.run_number }}" "Pli-${{ github.run_number }}.apk" \
+          gh release create "pli-${{ github.run_number }}" "FoldLauncherPro-${{ github.run_number }}.apk" \
             --target "${{ github.sha }}" --prerelease \
-            --title "Pli — build ${{ github.run_number }}" \
-            --notes "Launcher Pli compilé automatiquement depuis la branche pli."
+            --title "Fold Launcher Pro — build ${{ github.run_number }}" \
+            --notes "Fold Launcher Pro compilé automatiquement depuis la branche pli."

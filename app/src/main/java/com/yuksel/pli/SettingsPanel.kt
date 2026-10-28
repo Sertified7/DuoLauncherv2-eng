@@ -339,7 +339,7 @@ private fun SettingsOptions(
             ChoiceRow("Applis récentes au bout du dock (interne)", null, listOf(0, 1, 2, 3), s.recentInDock) { v -> launcher.updateSettings { it.copy(recentInDock = v) } }
         }
         SettingsCategory.HOME to "Horloge" -> Section("À droite de l’horloge") {
-            val choices = listOf("google" to "Recherche Google", "finder" to "Finder Samsung", "pli" to "Recherche Pli", "none" to "Rien")
+            val choices = listOf("google" to "Recherche Google", "finder" to "Finder Samsung", "pli" to "Recherche Fold Launcher Pro", "none" to "Rien")
             Row(Modifier.padding(16.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 choices.forEach { (key, name) -> PillButton(name, highlighted = s.headerSearch == key) { launcher.updateSettings { it.copy(headerSearch = key) } } }
             }
@@ -373,27 +373,27 @@ private fun SettingsOptions(
                 if (badgesAllowed) "Ouvrir" else "Activer", onNotificationAccess)
         }
         SettingsCategory.GESTURES to "Gestes" -> Section("Gestes sur l’accueil") {
-            ActionRow("Guide des gestes", "Tous les gestes de Pli expliqués", "Voir", onGuide)
+            ActionRow("Guide des gestes", "Tous les gestes de Fold Launcher Pro expliqués", "Voir", onGuide)
             ToggleRow("Glisser vers le bas en haut de l’écran", "Ouvre les notifications (ailleurs : la recherche)", s.swipeDownNotifications) { v ->
                 launcher.updateSettings { it.copy(swipeDownNotifications = v) } }
             GestureRow("Double appui sur un espace vide", s.doubleTap, launcher, onPick = { onPick("doubleTap") }) { v -> launcher.updateSettings { it.copy(doubleTap = v) } }
             GestureRow("Glisser à deux doigts vers le haut", s.twoFingerUp, launcher, onPick = { onPick("twoFingerUp") }) { v -> launcher.updateSettings { it.copy(twoFingerUp = v) } }
             GestureRow("Glisser à deux doigts vers le bas", s.twoFingerDown, launcher, onPick = { onPick("twoFingerDown") }) { v -> launcher.updateSettings { it.copy(twoFingerDown = v) } }
             if (listOf(s.doubleTap, s.twoFingerUp, s.twoFingerDown).contains("lock") && !accessibilityOn)
-                ActionRow("Verrouiller demande une autorisation", "Active « Pli – verrouillage par geste » dans Accessibilité", "Activer", onAccessibility)
+                ActionRow("Verrouiller demande une autorisation", "Active « Fold Launcher Pro – verrouillage par geste » dans Accessibilité", "Activer", onAccessibility)
         }
-        SettingsCategory.GENERAL to "Général" -> Section("Pli") {
-            if (!isDefaultHome) ActionRow("Faire de Pli l’appli d’accueil", "Pour le bouton Accueil, les raccourcis et les deux écrans", "Choisir", onMakeDefault)
-            else Text("Pli est ton appli d’accueil.", color = Holo.Soft, fontSize = 14.sp, modifier = Modifier.padding(16.dp))
+        SettingsCategory.GENERAL to "Général" -> Section("Fold Launcher Pro") {
+            if (!isDefaultHome) ActionRow("Faire de Fold Launcher Pro l’appli d’accueil", "Pour le bouton Accueil, les raccourcis et les deux écrans", "Choisir", onMakeDefault)
+            else Text("Fold Launcher Pro est ton appli d’accueil.", color = Holo.Soft, fontSize = 14.sp, modifier = Modifier.padding(16.dp))
             ToggleRow("Vibrations", "Petit retour haptique sur les appuis longs et les déplacements", s.haptics) { v -> launcher.updateSettings { it.copy(haptics = v) } }
             ToggleRow("Économie de batterie", "Sous 20 % (hors charge) : halos figés et ouverture des applis simple", s.batterySaver) { v ->
                 launcher.updateSettings { it.copy(batterySaver = v) } }
-            ActionRow("Guide des gestes", "Tous les gestes de Pli expliqués", "Voir", onGuide)
+            ActionRow("Guide des gestes", "Tous les gestes de Fold Launcher Pro expliqués", "Voir", onGuide)
             ActionRow("Revoir la présentation", "Les étapes du premier lancement", "Ouvrir", onOnboarding)
-            Text("Pli · launcher holographique pour Galaxy Z Fold", color = Holo.Muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            Text("Fold Launcher Pro · launcher holographique pour Galaxy Z Fold", color = Holo.Muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         }
         SettingsCategory.GENERAL to "Sauvegarde" -> Section("Sauvegarde") {
-            ActionRow("Exporter ma disposition", "Pages, dossiers, dock, widgets Pli et réglages dans un fichier", "Exporter", onExport)
+            ActionRow("Exporter ma disposition", "Pages, dossiers, dock, widgets Fold Launcher Pro et réglages dans un fichier", "Exporter", onExport)
             ActionRow("Importer une disposition", "Remplace la disposition actuelle", "Importer", onImport)
         }
         else -> Unit

@@ -410,7 +410,7 @@ fun WidgetPicker(launcher: Launcher, widgets: Widgets, modifier: Modifier, onPic
         LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (builtIns.isNotEmpty()) item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CardLabel("Widgets Pli")
+                    CardLabel("Widgets Fold Launcher Pro")
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         builtIns.forEach { kind ->
                             PillButton(cardTitle(TodayItem(kind, kind), widgets)) { onPickBuiltIn(kind) }

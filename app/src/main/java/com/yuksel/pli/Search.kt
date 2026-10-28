@@ -343,14 +343,14 @@ fun SearchPanel(launcher: Launcher, modifier: Modifier, onOpen: (AppInfo, Rect?)
                 }
                 if (noteHit) item {
                     Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(24.dp), .05f).padding(6.dp)) {
-                        SectionLabel("  Note Pli")
+                        SectionLabel("  Note Fold Launcher Pro")
                         ResultRow(Icons.Rounded.StickyNote2, note.lines().first().take(60), "Ta note rapide (page Aujourd’hui)") { onClose() }
                     }
                 }
                 if (pliHits.isNotEmpty()) item {
                     Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(24.dp), .05f).padding(6.dp)) {
-                        SectionLabel("  Réglages de Pli")
-                        pliHits.forEach { (label, _) -> ResultRow(Icons.Rounded.Tune, label, "Pli") { onPliSetting() } }
+                        SectionLabel("  Réglages de Fold Launcher Pro")
+                        pliHits.forEach { (label, _) -> ResultRow(Icons.Rounded.Tune, label, "Fold Launcher Pro") { onPliSetting() } }
                     }
                 }
                 if (settings.isNotEmpty()) item {

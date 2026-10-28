@@ -70,7 +70,7 @@ private val GESTURES = listOf(
 fun GestureGuide(modifier: Modifier, onClose: () -> Unit) {
     Column(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IridescentText("Gestes de Pli", 28.sp, Modifier.weight(1f), letterSpacing = (-.3).sp)
+            IridescentText("Gestes de Fold Launcher Pro", 28.sp, Modifier.weight(1f), letterSpacing = (-.3).sp)
             PillButton("Fermer", onClick = onClose)
         }
         Spacer(Modifier.height(12.dp))
@@ -108,13 +108,14 @@ fun Onboarding(
             Spacer(Modifier.height(20.dp))
             when (step) {
                 0 -> {
-                    IridescentText("Pli", 72.sp, letterSpacing = (-2).sp)
+                    IridescentText("Fold Launcher", 52.sp, letterSpacing = (-1.5).sp)
+                    IridescentText("Pro", 52.sp, letterSpacing = (-1.5).sp)
                     Text("Ton launcher holographique pour le Galaxy Z Fold.", color = Holo.Ink, fontSize = 20.sp, lineHeight = 26.sp)
                     Text("Deux écrans, deux dispositions, un dock commun, des widgets et une recherche qui apprend de toi. Quelques réglages et c’est parti.",
                         color = Holo.Muted, fontSize = 15.sp, lineHeight = 21.sp)
                 }
-                1 -> StepCard(Icons.Rounded.Home, "Appli d’accueil", "Pour que le bouton Accueil, les deux écrans et les raccourcis d’applis passent par Pli.",
-                    done = isDefaultHome, action = "Faire de Pli l’appli d’accueil", onAction = onMakeDefault)
+                1 -> StepCard(Icons.Rounded.Home, "Appli d’accueil", "Pour que le bouton Accueil, les deux écrans et les raccourcis d’applis passent par Fold Launcher Pro.",
+                    done = isDefaultHome, action = "Faire de Fold Launcher Pro l’appli d’accueil", onAction = onMakeDefault)
                 2 -> StepCard(Icons.Rounded.Notifications, "Pastilles et musique", "Les pastilles de notifications, leur aperçu en appui long et la carte de musique en cours ont besoin de l’accès aux notifications. Rien ne sort de ton téléphone.",
                     done = notificationsAllowed, action = "Autoriser", onAction = onNotificationAccess)
                 3 -> {
@@ -126,8 +127,8 @@ fun Onboarding(
                     GESTURES.take(6).forEach { GestureRow(it) }
                 }
                 else -> {
-                    StepTitle(Icons.Rounded.CheckCircle, "C’est prêt", "Tes applis principales sont déjà placées. Tu peux aussi reprendre une sauvegarde Pli.")
-                    PillButton("Importer une sauvegarde Pli", onClick = onImport)
+                    StepTitle(Icons.Rounded.CheckCircle, "C’est prêt", "Tes applis principales sont déjà placées. Tu peux aussi reprendre une sauvegarde Fold Launcher Pro.")
+                    PillButton("Importer une sauvegarde Fold Launcher Pro", onClick = onImport)
                     Text("Duo Launcher et l’accueil Samsung ne laissent pas une autre appli lire leur disposition : pour les retrouver, ajoute tes applis avec un appui long sur une case vide → « Ajouter des applis ».",
                         color = Holo.Muted, fontSize = 13.sp, lineHeight = 18.sp)
                 }

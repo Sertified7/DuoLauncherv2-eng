@@ -441,7 +441,7 @@ private fun DefaultHomeBanner(onClick: () -> Unit, modifier: Modifier = Modifier
     Row(modifier.glass(RoundedCornerShape(50), .08f).clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Rounded.Home, null, tint = Holo.Violet)
-        Text("Faire de Pli l’appli d’accueil", color = Holo.Ink, fontSize = 13.sp, modifier = Modifier.padding(start = 10.dp))
+        Text("Faire de Fold Launcher Pro l’appli d’accueil", color = Holo.Ink, fontSize = 13.sp, modifier = Modifier.padding(start = 10.dp))
     }
 }
 

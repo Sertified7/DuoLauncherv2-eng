@@ -74,7 +74,7 @@ fun RenameDialog(app: AppInfo, launcher: Launcher, onDone: () -> Unit) {
                 BasicTextField(text, { text = it }, Modifier.fillMaxWidth().focusRequester(focus), singleLine = true,
                     textStyle = TextStyle(color = Holo.Ink, fontSize = 17.sp), cursorBrush = SolidColor(Holo.Violet))
             }
-            Text(if (renamed && original != null) "Nom d’origine : $original" else "Ce nom ne s’affiche que dans Pli.", color = Holo.Muted, fontSize = 12.sp)
+            Text(if (renamed && original != null) "Nom d’origine : $original" else "Ce nom ne s’affiche que dans Fold Launcher Pro.", color = Holo.Muted, fontSize = 12.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (app.id in launcher.layout.labels) PillButton("Nom d’origine") {
                     launcher.update { l -> l.copy(labels = l.labels - app.id) }; onDone()

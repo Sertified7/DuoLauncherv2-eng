@@ -1,92 +1,213 @@
-# Duo Launcher
-
-A native Android launcher built around a right-side dock and a home screen that makes room when you unfold your phone.
-
-**Experimental Fold beta · Android 12 or later.** The primary physical test device is a Galaxy Fold8 running Android 17. Emulator coverage supplements that device; it does not establish compatibility with every foldable. Google Discover depends on the installed Google app and device support for activity embedding. See the [tested environments and remaining checks](docs/public-release.md#beta-0150-beta01-validation).
-
-<p>
-  <img src="docs/images/duo-launcher-cover-home.png" width="240" alt="Duo Home on a cover-sized emulator, with its right-side dock">
-  <img src="docs/images/duo-launcher-inner-home.png" width="500" alt="Duo Home unfolded, with an extra workspace on the left">
+<p align="center">
+  <img src="media/banner.png" alt="Fold Launcher Pro, l'écran interne et l'écran externe du Galaxy Z Fold" width="100%">
 </p>
 
-Screenshots use sample data on an emulator sized to the reference Fold. [Fresh-install welcome](docs/images/duo-launcher-welcome.png).
+<h1 align="center">Fold Launcher Pro</h1>
 
-**Start here:** [User guide](docs/user-guide.md) · [Troubleshooting](docs/troubleshooting.md) · [Beta release notes](docs/releases/0.15.0-beta01.md)
+<p align="center">
+  <b>Un launcher Android holographique pensé pour le Galaxy Z Fold.</b><br>
+  Deux écrans, deux dispositions indépendantes, des widgets « Aujourd’hui », une recherche qui apprend, et tout se règle au doigt.
+</p>
 
-## Features
+<p align="center">
+  <a href="https://github.com/yuksel3803/DuoLauncherv2/releases"><b>⬇️ Télécharger le dernier APK</b></a>
+  &nbsp;·&nbsp; Android 12 et plus &nbsp;·&nbsp; Kotlin + Jetpack Compose
+</p>
 
-- A persistent right-side dock and vertical Home status indicators.
-- Overlapping unfolded page pairs: an extra workspace beside Home 1, then Home 1 beside Home 2, and so on.
-- Android widgets, visual widget selection, resizing, native scrolling, and drag-and-drop between pages.
-- App dragging, pages created during an edge drag, Home folders, and separate personal/work catalogs where device policy permits.
-- Alphabetical All apps, Google search with a local app-search fallback, and live Discover on compatible devices.
-- Local photo wallpapers, light/dark/system or sunrise/sunset appearance, and layout export/import.
+---
 
-Android still controls the lock screen, notification panels, recents, and system app transitions.
+## Sommaire
 
-## Install and try it
+- [Le concept](#le-concept)
+- [Écran externe](#écran-externe)
+- [Écran interne](#écran-interne)
+- [Recherche](#recherche)
+- [Widgets](#widgets)
+- [Gestes](#gestes)
+- [Personnalisation](#personnalisation)
+- [Réglages](#réglages)
+- [Installation](#installation)
+- [Compilation et CI](#compilation-et-ci)
+- [Limites connues](#limites-connues)
+- [Structure du code](#structure-du-code)
 
-1. Download the signed APK from this repository's Releases section. Read its tested-device notes and known issues.
-2. Open the APK, allow installation from that source if Android asks, and open **Duo Launcher**.
-3. Try the layout before choosing **Set as home app**. Select Duo Launcher in Android's Home app settings when ready.
-4. Long press an empty Home cell or the narrow wallpaper margin beside a full grid to add widgets or **Customize launcher**. Help is available from customization.
+---
 
-To switch back, open Android **Settings → Apps → Default apps → Home app** and select your previous launcher. Vendor labels may differ. Installing Duo does not automatically select it as Home.
+## Le concept
 
-Normal beta updates install over the existing beta with the same signing key. Uninstalling or clearing storage removes the saved layout and widget bindings. A differently signed developer/debug build cannot be updated directly by the public APK; see [release and update notes](docs/public-release.md).
+Un Fold, c’est deux téléphones en un : un écran externe étroit qu’on utilise d’une main, et un grand écran interne presque carré. La plupart des launchers étirent la même grille sur les deux. **Fold Launcher Pro** traite chaque écran séparément :
 
-## Everyday controls
+- une **disposition par écran** (grille, pages, dock), avec la possibilité de copier l’une vers l’autre ;
+- un **style holographique** : fond sombre, halos irisés qui bougent doucement, bulles en verre et vraies icônes Android ;
+- tout se modifie **directement sur l’écran d’accueil** : appui long, glisser-déposer, sélection multiple, annuler.
 
-| Action | Gesture or control |
+<p align="center">
+  <img src="media/ecran-externe.png" width="260" alt="Écran externe : horloge, lecture en cours, grille d’applis et dock">
+  &nbsp;&nbsp;
+  <img src="media/ecran-interne.png" width="540" alt="Écran interne : page Aujourd’hui à gauche, grille d’applis à droite">
+</p>
+
+> Les images sont des maquettes du design holographique, avec des données d’exemple.
+
+---
+
+## Écran externe
+
+- **Horloge et date** en grand, avec des pastilles météo, prochain rendez-vous et batterie.
+- **Bouton de recherche à droite de l’horloge** : Google, Finder, la recherche Fold Launcher Pro, ou rien.
+- **Lecture en cours** : titre, artiste et bouton pause de la musique qui joue.
+- **Grille réglable** (colonnes et lignes), **pages illimitées**, placement libre dans n’importe quelle case.
+- **Dock** jusqu’à 5 applis, partagé avec l’écran interne.
+- **Pastilles de notifications** sur les icônes.
+- **Pas de widgets** ici : l’écran est trop étroit, ils vivent sur l’écran interne.
+
+## Écran interne
+
+- **Page « Aujourd’hui »** à gauche : météo, agenda, batterie des appareils, note rapide, rappels, temps d’écran, interrupteurs rapides… et n’importe quel widget Android.
+- **Page d’actualités** tout à gauche (remplace Google Discover, que Google ne laisse pas intégrer).
+- **Grille indépendante** de celle de l’écran externe, avec ses propres colonnes, lignes et pages.
+- **Dock étendu jusqu’à 10 applis**, plus les **applis récentes** affichées automatiquement au bout du dock.
+- **Écran partagé** : glisser une appli sur la zone « Écran partagé » l’ouvre à côté de l’appli en cours.
+
+---
+
+## Recherche
+
+<p align="center">
+  <img src="media/recherche.png" width="280" alt="Recherche : résultats d’applis, contacts, calcul et web">
+</p>
+
+- S’ouvre en **glissant vers le bas** ou avec le bouton à côté de l’horloge ; se ferme en glissant.
+- Cherche dans les **applis, les contacts, les réglages et le web**, et fait les **calculs** directement.
+- **Elle apprend** : les applis que tu ouvres le plus souvent depuis une recherche remontent en premier.
+- **Ajout de plusieurs applis d’un coup** sur l’accueil depuis la liste.
+
+---
+
+## Widgets
+
+| Widget | Ce qu’il fait |
 | --- | --- |
-| Change pages | Swipe horizontally across Home, the dock, or right rail; one page per gesture |
-| All apps | Swipe past the last Home page or tap its page control |
-| Discover | Swipe right from the first Home page or tap the compass |
-| Return from Discover | Swipe left, use the right-pointing arrow, or press Back |
-| Rearrange apps/widgets | Hold, then drag; pause at the screen edge to change or create a page |
-| Add to the dock | Drag into a vacancy; move an app out first when the dock is full |
-| Scroll a widget | Swipe vertically inside its content; hold still to pick it up |
-| Customize | Long press empty Home space or the wallpaper margin beside the grid |
-| Notifications / Quick Settings | Swipe down from Home's left 70% / right 30%, after enabling optional shade gestures |
+| Météo | Température, ciel et prévisions des prochaines heures (ville réglable). |
+| Agenda | Les prochains rendez-vous du calendrier du téléphone. |
+| Batterie | Le téléphone et les appareils Bluetooth connectés (écouteurs, montre). |
+| Note | Une note rapide qui se garde d’une session à l’autre. |
+| Rappels | Une petite liste de choses à faire, à cocher. |
+| Temps d’écran | Le temps passé aujourd’hui et les applis les plus utilisées. |
+| Interrupteurs | Lampe, Bluetooth, sonnerie/vibreur, ne pas déranger, rotation (Wi-Fi, données et NFC ouvrent le panneau système). |
+| Widgets Android | N’importe quel widget installé, redimensionnable. |
+| Piles | Plusieurs widgets empilés au même endroit, on passe de l’un à l’autre en glissant. |
 
-The surrounding status ring shows battery, the inner arcs show Wi-Fi strength, and the lower dots show cellular strength. Unknown readings are not displayed as full signal. This rail applies to Home only.
+---
 
-## Optional access and privacy
+## Gestes
 
-No launcher account, server, advertising, analytics, or automatic crash-upload service is used. Layouts and selected backgrounds stay on the device unless explicitly exported or shared.
+| Geste | Action |
+| --- | --- |
+| Glisser vers le bas | Recherche (ou panneau de notifications, au choix) |
+| Glisser vers le haut sur une icône | Raccourci de l’appli (ex. nouveau message, appareil photo selfie) |
+| Double appui | Verrouiller l’écran (réglable) |
+| Deux doigts vers le haut / le bas | Action au choix |
+| Appui long sur une appli | Menu : renommer, changer d’icône, protéger, infos, stockage, désinstaller |
+| Appui long sur le fond | Mode édition : déplacer, sélection multiple, corbeille, ajouter des pages |
 
-- **Widgets:** Android asks to allow binding; providers may have their own setup.
-- **Shade gestures:** the optional accessibility service opens notifications and Quick Settings. It cannot read window contents or inject gestures.
-- **Sunrise/sunset:** manually enter coordinates or explicitly request approximate location. There is no background location request.
-- **Photos:** the system picker grants access to chosen images, without whole-library access.
-- **Google features:** the installed Google app's account, network, and privacy settings apply.
+Un **guide des gestes** animé s’affiche au premier lancement, et reste accessible dans les réglages.
 
-Read [data and permissions](PRIVACY.md) before sharing backups or diagnostics.
+---
 
-## Known limits
+## Personnalisation
 
-- Discover can differ across Google, Android, and vendor updates. Its smooth embedding transition includes a version-scoped compatibility workaround; it is not a portable SystemUI API. Recovery controls let you return Home when unavailable.
-- Work apps/widgets remain subject to administrator policy. Private Space is not supported.
-- Icon packs and notification dots are not implemented. Folders cannot nest or occupy dock slots.
-- Imported Android widgets require binding again. Cross-installation work entries may require manual placement. Backups exclude photo backgrounds and system widget capabilities.
-- Secure lock-screen replacement and hinge-driven cross-display animation are outside this beta.
+- **Forme des icônes** : rond, squircle, arrondi, carré, goutte, feuille ou forme d’origine.
+- **Packs d’icônes** et icônes **teintées** dans la couleur du thème.
+- **Renommer une appli** et lui donner une **icône personnalisée** (image de la galerie).
+- **Dossiers grand format** : 1×1, 2×2 ou toute la largeur de l’écran ; un appui sur une appli du dossier l’ouvre directement.
+- **Applis protégées** par empreinte ou code.
+- **Verrouillage de la disposition** pour ne rien déplacer par erreur.
+- **Annuler** la dernière modification.
+- **Copier la disposition** d’un écran vers l’autre.
+- **Sauvegarde / restauration** de toute la disposition et des réglages dans un fichier JSON.
 
-## Build
+<details>
+<summary>Les autres directions de design explorées (Holographique a été retenu)</summary>
 
-Use JDK 17 or Android Studio's bundled JDK, Android SDK 36, and the included Gradle wrapper. Set `ANDROID_HOME` or a local `sdk.dir` in `local.properties`.
+<p align="center"><img src="media/directions.png" alt="Quatre directions : Holographique, Cockpit, Orbital et Liquide"></p>
 
-```sh
-./scripts/gradle.sh :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
+</details>
+
+---
+
+## Réglages
+
+Les réglages sont organisés en **catégories** avec un **aperçu en direct** de l’écran d’accueil en haut : chaque changement (grille, forme d’icône, étiquettes, dock…) se voit immédiatement.
+
+- **Accueil** : grilles par écran, étiquettes, nouvelles applis ajoutées automatiquement.
+- **Dock** : taille du dock externe et interne, nombre d’applis récentes.
+- **Apparence** : fond d’écran du téléphone ou fond holographique, parallaxe, halos, forme et pack d’icônes.
+- **Gestes** : double appui, deux doigts, glisser vers le bas.
+- **Animations** : ouverture holographique des applis ou animation Android, retours haptiques.
+- **Batterie** : économie d’énergie automatique sous 20 % (plus de halos animés ni d’effet d’ouverture).
+- **Sauvegarde**, **Pastilles de notifications**, **Launcher par défaut**.
+
+---
+
+## Installation
+
+1. Télécharge le dernier `FoldLauncherPro-N.apk` dans les [releases](https://github.com/yuksel3803/DuoLauncherv2/releases).
+2. Ouvre-le sur le téléphone et autorise l’installation depuis cette source.
+3. Au premier lancement, l’accueil guidé propose de faire de Fold Launcher Pro le **launcher par défaut** et d’activer les permissions utiles (pastilles, agenda, contacts, position pour la météo).
+4. Les nouvelles versions s’installent par-dessus l’ancienne sans perdre la disposition (même signature, même identifiant `com.yuksel.pli`).
+
+**Compatibilité** : Android 12 (API 31) minimum, ciblé Android 16 (API 36). Testé sur Galaxy Z Fold 8, fonctionne aussi sur un téléphone classique (un seul écran).
+
+---
+
+## Compilation et CI
+
+```bash
+git clone -b pli https://github.com/yuksel3803/DuoLauncherv2.git
+cd DuoLauncherv2
+./gradlew :app:assembleRelease
 ```
 
-The debug APK is at `app/build/outputs/apk/debug/app-debug.apk`. Release builds use R8 and resource shrinking; private signing material stays outside the repository. Follow [release instructions](docs/public-release.md) for signing and public-source export.
+Chaque push sur la branche `pli` lance le workflow [`build-pli.yml`](.github/workflows/build-pli.yml), qui :
 
-The project uses Kotlin, Jetpack Compose, AndroidX Window, and native widget hosting. Instrumentation runs on disposable emulators. Some integration fixtures require Google, Clock, Chrome, and a configured emulator; they are not commands for your everyday phone.
+1. compile l’APK release avec Java 17 et le SDK Android 36 ;
+2. le signe avec la clé de mise à jour du dépôt ;
+3. publie une release `pli-N` avec le fichier `FoldLauncherPro-N.apk`.
 
-The [contributor code map](docs/architecture.md) explains the main components, data ownership and gesture/widget constraints.
+---
 
-## Feedback and contributions
+## Limites connues
 
-Use issue templates with version, phone model, Android version, folded/unfolded state, and reproduction steps. Review screenshots and logs for personal/work information. See [contributing](CONTRIBUTING.md) and [changes](CHANGELOG.md).
+Certaines choses dépendent d’Android ou de One UI et ne peuvent pas être faites par un launcher :
 
-Source is under the [MIT license](LICENSE); dependency notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). This independent project is unaffiliated with Apple, Google, or Samsung. The default wallpaper is drawn locally; app icons come from installed apps. Apple research media and Google application code are excluded from the public source and APK.
+- **Wi-Fi, données mobiles, NFC** : Android interdit aux applis de les basculer ; l’interrupteur ouvre le panneau système.
+- **Vider le cache d’une autre appli** : impossible, le menu ouvre la page de stockage de l’appli.
+- **Importer la disposition de One UI Home ou d’un autre launcher** : ces données sont privées à chaque launcher.
+- **Écran partagé** : dépend de One UI, qui doit accepter l’ouverture côte à côte.
+- **Google Discover** : Google ne permet pas de l’intégrer, d’où la page d’actualités maison.
+- **Écran verrouillé en ouvrant le Fold** : c’est un réglage Samsung, pas un réglage du launcher.
+
+---
+
+## Structure du code
+
+Tout le code est dans [`app/src/main/java/com/yuksel/pli/`](app/src/main/java/com/yuksel/pli/) :
+
+| Fichier | Rôle |
+| --- | --- |
+| `MainActivity.kt` | Activité HOME, lancement des applis, écran partagé, sauvegarde. |
+| `PliApp.kt` | Racine Compose : choisit la disposition externe ou interne selon la taille d’écran. |
+| `Launcher.kt` | État central : applis, disposition, réglages, annuler, économie d’énergie. |
+| `Layout.kt` | Modèle de grille : cases, dossiers grand format, pages, dock, déplacements. |
+| `HomeGrid.kt`, `Header.kt` | Grille d’accueil, horloge, pastilles et bouton de recherche. |
+| `Today.kt`, `Widgets.kt`, `Toggles.kt`, `Productivity.kt` | Page Aujourd’hui et widgets. |
+| `Search.kt` | Recherche, apprentissage et ajout multiple d’applis. |
+| `News.kt` | Page d’actualités. |
+| `Customize.kt`, `CustomIcons.kt`, `IconPacks.kt` | Renommage, icônes personnalisées, packs et formes. |
+| `Menus.kt`, `SettingsPanel.kt`, `Onboarding.kt` | Menus, réglages avec aperçu, accueil guidé et guide des gestes. |
+| `Holo.kt` | Fond holographique, halos, texte irisé, animation d’ouverture. |
+| `Services.kt`, `PliAccessibility.kt` | Pastilles de notifications et verrouillage par geste. |
+| `Store.kt` | Enregistrement des réglages, de la disposition et de la note. |
+
+> Le nom interne du code reste `pli` (nom de travail du projet) pour que les mises à jour s’installent par-dessus les versions déjà présentes.
