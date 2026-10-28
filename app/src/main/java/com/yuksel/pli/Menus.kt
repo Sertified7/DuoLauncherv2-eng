@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AddToHomeScreen
 import androidx.compose.material.icons.rounded.Apps
@@ -39,6 +41,7 @@ import androidx.compose.material.icons.rounded.CallSplit
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -110,9 +113,9 @@ private fun MenuRow(icon: ImageVector, text: String, tint: Color = Holo.Ink, onC
 
 @Composable
 private fun MenuCard(content: @Composable () -> Unit) {
-    Column(Modifier.width(270.dp).halo(Holo.Violet.copy(alpha = .14f), 24.dp).clip(RoundedCornerShape(28.dp))
+    Column(Modifier.width(290.dp).heightIn(max = 600.dp).halo(Holo.Violet.copy(alpha = .14f), 24.dp).clip(RoundedCornerShape(28.dp))
         .background(Holo.Panel.copy(alpha = .94f)).border(1.dp, Holo.edgeBrush, RoundedCornerShape(28.dp))
-        .clickable(remember { MutableInteractionSource() }, null) {}.padding(8.dp)) { content() }
+        .clickable(remember { MutableInteractionSource() }, null) {}.verticalScroll(rememberScrollState()).padding(8.dp)) { content() }
 }
 
 @Composable
@@ -123,7 +126,7 @@ private fun Divider() {
 /** The long-press menu of an app: its shortcuts, then home/dock/folder actions. */
 @Composable
 fun AppMenu(request: MenuRequest, launcher: Launcher, currentScreen: Screen, onDismiss: () -> Unit,
-    onRenameFolder: (String) -> Unit, onUninstall: (AppInfo) -> Unit, onInfo: (AppInfo) -> Unit) {
+    onRenameFolder: (String) -> Unit, onUninstall: (AppInfo) -> Unit, onInfo: (AppInfo) -> Unit, onOpenApp: (AppInfo) -> Unit = {}) {
     val context = LocalContext.current
     Box(Modifier.fillMaxSize()) {
         Scrim(.35f, onDismiss)
@@ -159,6 +162,24 @@ fun AppMenu(request: MenuRequest, launcher: Launcher, currentScreen: Screen, onD
                     Column(Modifier.padding(start = 12.dp)) {
                         Text(app.label, color = Holo.Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (app.work) Text("Profil professionnel", color = Holo.Muted, fontSize = 12.sp)
+                    }
+                }
+                val previews = BadgeService.previews.collectAsState().value[app.packageName].orEmpty()
+                if (previews.isNotEmpty()) {
+                    Divider()
+                    previews.forEach { n ->
+                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                            .clickable { if (!BadgeService.open(n)) onOpenApp(app); onDismiss() }
+                            .padding(horizontal = 14.dp, vertical = 8.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(7.dp).background(Holo.Badge, CircleShape))
+                                Text(n.title.ifBlank { app.label }, color = Holo.Ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 8.dp))
+                                Text(ago(java.time.Instant.ofEpochMilli(n.time)), color = Holo.Muted, fontSize = 11.sp)
+                            }
+                            if (n.text.isNotBlank()) Text(n.text, color = Holo.Soft, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(start = 15.dp, top = 2.dp))
+                        }
                     }
                 }
                 val shortcuts by produceState(emptyList<AppShortcut>(), app.id) {

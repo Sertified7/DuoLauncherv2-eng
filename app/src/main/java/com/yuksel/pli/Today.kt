@@ -62,6 +62,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -203,8 +205,11 @@ private fun EditBar(title: String, canUp: Boolean, canDown: Boolean, resizable: 
 @Composable
 private fun SmallRound(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit,
     enabled: Boolean = true, tint: Color = Holo.Ink) {
-    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.padding(start = 4.dp).size(36.dp).glass(CircleShape, .08f)) {
-        Icon(icon, label, tint = if (enabled) tint else tint.copy(alpha = .3f), modifier = Modifier.size(18.dp))
+    // A compact round button: 34 dp drawn, 8 dp apart, so the row stays tidy.
+    Box(Modifier.padding(start = 8.dp).size(34.dp).glass(CircleShape, .08f)
+        .clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+        .semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
+        Icon(icon, null, tint = if (enabled) tint else tint.copy(alpha = .3f), modifier = Modifier.size(18.dp))
     }
 }
 

@@ -149,26 +149,12 @@ fun PliApp(host: PliHost, signals: HostSignals) {
     var showToday by remember { mutableIntStateOf(0) }
     var screen by remember { mutableStateOf(Screen.COVER) }
     val drag = remember { DragState() }
+    var article by remember { mutableStateOf<Article?>(null) }
     LaunchedEffect(launcher.iconReloads) { if (launcher.iconReloads > 0) launcher.reloadApps() }
 
-    // "Continuer": after folding or unfolding, offer the app last opened on the other screen.
-    var continueId by remember { mutableStateOf<String?>(null) }
-    var previousScreen by remember { mutableStateOf<Screen?>(null) }
-    LaunchedEffect(screen, launcher.loaded) {
-        if (!launcher.loaded) return@LaunchedEffect
-        val before = previousScreen
-        previousScreen = screen
-        val last = launcher.lastLaunch
-        if (before != null && before != screen && last != null && last.second != screen &&
-            System.currentTimeMillis() - last.third < 15 * 60_000L && last.first in launcher.byId) {
-            continueId = last.first
-            delay(25_000)
-            continueId = null
-        } else continueId = null
-    }
 
     fun closeAll() { panel = Panel.NONE; menu = null; folder = null; todayEditing = false; drag.clear() }
-    LaunchedEffect(signals.homePresses) { if (signals.homePresses > 0) closeAll() }
+    LaunchedEffect(signals.homePresses) { if (signals.homePresses > 0) { closeAll(); article = null } }
     BackHandler(panel != Panel.NONE || menu != null || folder != null || todayEditing) {
         when {
             menu != null -> menu = null
@@ -207,7 +193,7 @@ fun PliApp(host: PliHost, signals: HostSignals) {
         notifications = { host.expandNotifications() },
         todayEditing = { todayEditing }, setTodayEditing = { todayEditing = it },
         addWidget = { panel = Panel.WIDGETS }, settings = { panel = Panel.SETTINGS },
-        gesture = ::runGesture,
+        gesture = ::runGesture, read = { article = it },
     )
 
     CompositionLocalProvider(LocalBubbles provides launcher.settings.bubbles, LocalBadges provides badges) {
@@ -222,12 +208,8 @@ fun PliApp(host: PliHost, signals: HostSignals) {
                 else key("cover", launcher.settings.discover) { CoverHome(host, signals, today, drag, actions, swipesOn, showToday) }
             }
             DragGhost(launcher, drag, if (screen == Screen.INNER) 62.dp else 60.dp)
-            val continueApp = continueId?.let { launcher.byId[it] }
-            if (continueApp != null && panel == Panel.NONE && menu == null) Box(Modifier.fillMaxSize()
-                .windowInsetsPadding(WindowInsets.safeDrawing).padding(bottom = 120.dp), contentAlignment = Alignment.BottomCenter) {
-                ContinueCard(continueApp, onOpen = { continueId = null; open(continueApp, null) }, onDismiss = { continueId = null; launcher.forgetLastLaunch() })
-            }
 
+            FullPanel(article != null) { m -> article?.let { ArticleReader(it, m) { article = null } } }
             FullPanel(panel == Panel.SEARCH) {
                 key(signals.resumes) {
                     SearchPanel(launcher, it, open, onHold = { app, r -> menu = MenuRequest(app.id, r, Origin.Drawer) },
@@ -274,7 +256,7 @@ fun PliApp(host: PliHost, signals: HostSignals) {
             menu?.let { request ->
                 AppMenu(request, launcher, screen, onDismiss = { menu = null },
                     onRenameFolder = { id -> folder = id to screen; renameFolder = true },
-                    onUninstall = host::uninstall, onInfo = host::appInfo)
+                    onUninstall = host::uninstall, onInfo = host::appInfo, onOpenApp = { open(it, null) })
             }
         }
     }
@@ -295,6 +277,7 @@ class HomeActions(
     val addWidget: () -> Unit,
     val settings: () -> Unit,
     val gesture: (String) -> Unit,
+    val read: (Article) -> Unit,
 )
 
 /** A full-screen frosted panel that slides up (search, all apps, settings, widgets). */
@@ -330,31 +313,6 @@ private fun HomePressScroll(signals: HostSignals, pager: PagerState, firstHome: 
     LaunchedEffect(signals.homePresses) { if (signals.homePresses > 0 && pager.currentPage != firstHome) pager.animateScrollToPage(firstHome) }
 }
 
-/** Landing on the far-left page opens Google Discover, then the pager steps back one page. */
-@Composable
-private fun DiscoverTrigger(host: PliHost, pager: PagerState, enabled: Boolean) {
-    LaunchedEffect(pager.settledPage, enabled) {
-        if (enabled && pager.settledPage == 0) {
-            host.openDiscover()
-            delay(450)
-            pager.scrollToPage(1)
-        }
-    }
-}
-
-@Composable
-private fun DiscoverPage() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(Modifier.glass(RoundedCornerShape(30.dp), .06f).padding(horizontal = 30.dp, vertical = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Rounded.Explore, null, tint = Holo.Cyan, modifier = Modifier.size(34.dp))
-            Spacer(Modifier.height(10.dp))
-            IridescentText("Discover", 28.sp, letterSpacing = 0.sp, weight = androidx.compose.ui.text.font.FontWeight.Light)
-            Text("Ouverture de Google…", color = Holo.Muted, fontSize = 13.sp)
-        }
-    }
-}
-
 /** Cover screen: Discover and "Aujourd'hui" on the left, big clock, home pages, dock with the search orb. */
 @Composable
 private fun CoverHome(host: PliHost, signals: HostSignals, today: TodayState, drag: DragState, actions: HomeActions,
@@ -362,12 +320,11 @@ private fun CoverHome(host: PliHost, signals: HostSignals, today: TodayState, dr
     val launcher = host.launcher
     val items = launcher.visibleHome(Screen.COVER)
     val nowPlaying by MediaWatcher.nowPlaying.collectAsState()
-    val discover = launcher.settings.discover && host.hasGoogleApp
+    val discover = launcher.settings.discover
     val lead = if (discover) 2 else 1
     var homePages by remember { mutableIntStateOf(1) }
     val pager = rememberPagerState(initialPage = lead) { lead + homePages + if (drag.active) 1 else 0 }
     HomePressScroll(signals, pager, lead)
-    DiscoverTrigger(host, pager, discover)
     LaunchedEffect(showToday) { if (showToday > 0) pager.animateScrollToPage(lead - 1) }
     Column(Modifier.fillMaxSize().homeSwipes(swipesOn, { drag.source != null || pager.currentPage < lead }, actions.drawer, { swipeDown(host, actions, it) }, { up -> actions.gesture(if (up) launcher.settings.twoFingerUp else launcher.settings.twoFingerDown) })) {
         ClockHeader(today, 84.sp, compact = false, Modifier.padding(start = 22.dp, end = 22.dp, top = 10.dp), onWeather = {})
@@ -382,7 +339,7 @@ private fun CoverHome(host: PliHost, signals: HostSignals, today: TodayState, dr
                     onOpenApp = { a, r -> actions.open(a, r) }, onOpenFolder = actions.openFolder,
                     onMenu = actions.menu, onCloseMenu = actions.closeMenu, onEmptyHold = actions.emptyHold, onEmptyDoubleTap = { actions.gesture(launcher.settings.doubleTap) },
                     leadingPage = { page ->
-                        if (discover && page == 0) DiscoverPage()
+                        if (discover && page == 0) NewsPage(Modifier.fillMaxSize().padding(horizontal = 16.dp), actions.read)
                         else TodayColumn(launcher, host.widgets, today, actions.todayEditing(), Modifier.fillMaxSize().padding(horizontal = 16.dp),
                             onEditing = actions.setTodayEditing, onAddWidget = actions.addWidget, onPermission = host::requestPermission,
                             onNotificationAccess = host::openNotificationAccess, onSettings = actions.settings, onOpenPackage = host::openPackage)
@@ -406,12 +363,11 @@ private fun InnerHome(host: PliHost, signals: HostSignals, today: TodayState, dr
     swipesOn: Boolean, @Suppress("UNUSED_PARAMETER") showToday: Int) {
     val launcher = host.launcher
     val items = launcher.visibleHome(Screen.INNER)
-    val discover = launcher.settings.discover && host.hasGoogleApp
+    val discover = launcher.settings.discover
     val lead = if (discover) 1 else 0
     var homePages by remember { mutableIntStateOf(1) }
     val pager = rememberPagerState(initialPage = lead) { lead + homePages + if (drag.active) 1 else 0 }
     HomePressScroll(signals, pager, lead)
-    DiscoverTrigger(host, pager, discover)
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.weight(1f).fillMaxWidth()) {
             TodayColumn(launcher, host.widgets, today, actions.todayEditing(),
@@ -434,7 +390,7 @@ private fun InnerHome(host: PliHost, signals: HostSignals, today: TodayState, dr
                         HomePages(Screen.INNER, launcher, items, metrics, pager, lead, drag, s.labels, Modifier.weight(1f).padding(horizontal = 8.dp),
                             onOpenApp = { a, r -> actions.open(a, r) }, onOpenFolder = actions.openFolder,
                             onMenu = actions.menu, onCloseMenu = actions.closeMenu, onEmptyHold = actions.emptyHold, onEmptyDoubleTap = { actions.gesture(launcher.settings.doubleTap) },
-                            leadingPage = { DiscoverPage() })
+                            leadingPage = { NewsPage(Modifier.fillMaxSize().padding(horizontal = 8.dp), actions.read) })
                         PageDots(pager, pager.pageCount, lead, modifier = Modifier.align(Alignment.CenterHorizontally))
                     }
                 }
@@ -446,19 +402,5 @@ private fun InnerHome(host: PliHost, signals: HostSignals, today: TodayState, dr
             Modifier.align(Alignment.CenterHorizontally).widthIn(max = (dockCount * 78 + 40).dp).fillMaxWidth()
                 .padding(start = 18.dp, end = 18.dp, bottom = 12.dp, top = 6.dp),
             onOpenApp = { a, r -> actions.open(a, r) }, onMenu = actions.menu, onCloseMenu = actions.closeMenu, onSearch = null)
-    }
-}
-
-/** "Continuer avec …" after folding or unfolding. */
-@Composable
-private fun ContinueCard(app: AppInfo, onOpen: () -> Unit, onDismiss: () -> Unit) {
-    Row(Modifier.halo(Holo.Violet.copy(alpha = .25f), 14.dp).glass(RoundedCornerShape(50), .12f)
-        .clickable(onClick = onOpen).padding(start = 8.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically) {
-        AppIcon(app, 36.dp, showBadge = false)
-        Text("Continuer avec ${app.label}", color = Holo.Ink, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 12.dp))
-        androidx.compose.material3.IconButton(onClick = onDismiss, Modifier.size(36.dp)) {
-            Icon(androidx.compose.material.icons.Icons.Rounded.Close, "Fermer", tint = Holo.Muted, modifier = Modifier.size(18.dp))
-        }
     }
 }

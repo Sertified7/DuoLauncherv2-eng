@@ -174,7 +174,7 @@ fun SettingsPanel(
                     launcher.updateSettings { it.copy(innerDockSize = v) } }
             }
             Section("Accueil") {
-                ToggleRow("Page Google Discover", "Tout à gauche : glisse vers la droite pour ouvrir Discover", s.discover) { v -> launcher.updateSettings { it.copy(discover = v) } }
+                ToggleRow("Page Actus", "Tout à gauche : les actualités (Google Actualités, Le Monde, franceinfo)", s.discover) { v -> launcher.updateSettings { it.copy(discover = v) } }
                 ToggleRow("Ajouter les nouvelles applis", "Une appli installée apparaît sur les deux écrans", s.addNewApps) { v -> launcher.updateSettings { it.copy(addNewApps = v) } }
                 ToggleRow("Glisser vers le bas en haut de l’écran", "Ouvre les notifications (ailleurs : la recherche)", s.swipeDownNotifications) { v ->
                     launcher.updateSettings { it.copy(swipeDownNotifications = v) } }

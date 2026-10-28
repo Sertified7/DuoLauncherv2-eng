@@ -33,14 +33,35 @@ class BadgeService : NotificationListenerService() {
 
     private fun recount() {
         val active = runCatching { activeNotifications }.getOrNull() ?: return
-        counts.value = active.asSequence()
-            .filter { it.isClearable && !it.isOngoing && it.notification.flags and Notification.FLAG_GROUP_SUMMARY == 0 }
-            .groupingBy { it.packageName }.eachCount()
+        val shown = active.filter { it.isClearable && !it.isOngoing && it.notification.flags and Notification.FLAG_GROUP_SUMMARY == 0 }
+        counts.value = shown.groupingBy { it.packageName }.eachCount()
+        previewMap.value = shown.groupBy { it.packageName }.mapValues { (_, list) ->
+            list.sortedByDescending { it.postTime }.take(3).mapNotNull { sbn ->
+                val extras = sbn.notification.extras
+                val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+                val text = (extras.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: extras.getCharSequence(Notification.EXTRA_TEXT))?.toString().orEmpty()
+                if (title.isBlank() && text.isBlank()) null
+                else NotificationPreview(sbn.key, title, text, sbn.postTime, sbn.notification.contentIntent)
+            }
+        }.filterValues { it.isNotEmpty() }
     }
 
     companion object {
         private val counts = MutableStateFlow<Map<String, Int>>(emptyMap())
         val badges: StateFlow<Map<String, Int>> = counts.asStateFlow()
+        private val previewMap = MutableStateFlow<Map<String, List<NotificationPreview>>>(emptyMap())
+        /** The latest notifications of each app, for the long-press preview. */
+        val previews: StateFlow<Map<String, List<NotificationPreview>>> = previewMap.asStateFlow()
+
+        /** Opens what the notification points to. */
+        fun open(preview: NotificationPreview): Boolean = runCatching {
+            val intent = preview.intent ?: return false
+            val options = android.app.ActivityOptions.makeBasic()
+            if (android.os.Build.VERSION.SDK_INT >= 34)
+                options.setPendingIntentBackgroundActivityStartMode(android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED)
+            intent.send(null, 0, null, null, null, null, options.toBundle())
+            true
+        }.getOrDefault(false)
 
         fun hasAccess(context: Context): Boolean {
             val enabled = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners") ?: return false
@@ -49,6 +70,8 @@ class BadgeService : NotificationListenerService() {
         }
     }
 }
+
+data class NotificationPreview(val key: String, val title: String, val text: String, val time: Long, val intent: android.app.PendingIntent?)
 
 // ---------- Now playing ----------
 
