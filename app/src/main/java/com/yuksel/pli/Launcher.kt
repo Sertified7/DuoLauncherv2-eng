@@ -43,7 +43,7 @@ class Launcher(private val context: Context) {
         apps = list
         byId = list.associateBy { it.id }
         if (removedPackage != null) {
-            val keep = (layout.cover + layout.inner + layout.dock + layout.folders.values.flatMap { it.apps })
+            val keep = (layout.cover + layout.inner + layout.dock + layout.dockExtra + layout.folders.values.flatMap { it.apps })
                 .filterNot { it.startsWith("$removedPackage/") && it !in byId }.toSet()
             update { LayoutEdits.clean(it, keep + byId.keys) }
         }
@@ -60,10 +60,13 @@ class Launcher(private val context: Context) {
         if (next != layout) { layout = next; store.saveLayout(next) }
     }
 
+    val dockSizes get() = DockSizes(settings.dockSize, settings.innerDockSize)
+
     fun updateSettings(transform: (PliSettings) -> PliSettings) {
         val next = transform(settings)
-        if (next.dockSize < layout.dock.size) update { it.copy(dock = it.dock.take(next.dockSize)) }
+        val resize = next.dockSize != settings.dockSize || next.innerDockSize != settings.innerDockSize
         settings = next; store.saveSettings(next)
+        if (resize) update { LayoutEdits.resizeDock(it, dockSizes) }
     }
 
     /** Home entries that can be shown right now (known, not hidden; folders with visible apps). */
@@ -72,14 +75,14 @@ class Launcher(private val context: Context) {
         else id in byId && id !in layout.hidden
     }
 
-    fun visibleDock(): List<String> = layout.dock.filter { it in byId && it !in layout.hidden }
+    fun visibleDock(screen: Screen): List<String> = layout.dockOf(screen).filter { it in byId && it !in layout.hidden }
 
     fun folderApps(folderId: String): List<AppInfo> =
         layout.folders[folderId]?.apps?.mapNotNull { byId[it] }?.filter { it.id !in layout.hidden } ?: emptyList()
 
     fun hide(app: AppInfo) = update { l ->
         val folders = l.folders.mapValues { (_, f) -> f.copy(apps = f.apps - app.id) }
-        LayoutEdits.clean(l.copy(cover = l.cover - app.id, inner = l.inner - app.id, dock = l.dock - app.id,
+        LayoutEdits.clean(l.copy(cover = l.cover - app.id, inner = l.inner - app.id, dock = l.dock - app.id, dockExtra = l.dockExtra - app.id,
             folders = folders, hidden = l.hidden + app.id), byId.keys)
     }
 

@@ -124,10 +124,22 @@ class MainActivity : ComponentActivity(), PliHost {
         }.onFailure { runCatching { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) } }
     }
 
+    override val hasGoogleApp: Boolean
+        get() = runCatching { packageManager.getLaunchIntentForPackage(GOOGLE) != null }.getOrDefault(false)
+
+    /** Opens the Google app (its home is the Discover feed), sliding in from the left. */
+    override fun openDiscover() {
+        val intent = packageManager.getLaunchIntentForPackage(GOOGLE) ?: return
+        val options = ActivityOptions.makeCustomAnimation(this, android.R.anim.slide_in_left, android.R.anim.fade_out).toBundle()
+        runCatching { startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), options) }
+    }
+
     override fun expandNotifications() {
         runCatching {
             val service = getSystemService("statusbar")
             Class.forName("android.app.StatusBarManager").getMethod("expandNotificationsPanel").invoke(service)
         }
     }
+
+    private companion object { const val GOOGLE = "com.google.android.googlequicksearchbox" }
 }

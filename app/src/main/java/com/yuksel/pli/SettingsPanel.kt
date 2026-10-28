@@ -2,6 +2,7 @@ package com.yuksel.pli
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -70,6 +73,25 @@ private fun ActionRow(title: String, detail: String?, action: String, onClick: (
     }
 }
 
+/** A row of round choices; 0 shows as "Auto". */
+@Composable
+private fun ChoiceRow(title: String, detail: String?, options: List<Int>, selected: Int, onSelect: (Int) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+        Text(title, color = Holo.Ink, fontSize = 15.sp)
+        if (detail != null) Text(detail, color = Holo.Muted, fontSize = 12.sp)
+        Row(Modifier.padding(top = 8.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            options.forEach { n ->
+                val on = selected == n
+                Box(Modifier.height(38.dp).widthIn(min = 38.dp).clip(RoundedCornerShape(50))
+                    .then(if (on) Modifier.background(Brush.linearGradient(Holo.Iridescent), RoundedCornerShape(50)) else Modifier.glass(RoundedCornerShape(50)))
+                    .clickable { onSelect(n) }.padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
+                    Text(if (n == 0) "Auto" else "$n", color = if (on) Color(0xFF120A22) else Holo.Soft, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun SettingsPanel(
     launcher: Launcher, isDefaultHome: Boolean, badgesAllowed: Boolean, modifier: Modifier,
@@ -96,23 +118,20 @@ fun SettingsPanel(
                 ToggleRow("Icônes en bulles de verre", "Sinon, la forme d’origine des icônes", s.bubbles) { v -> launcher.updateSettings { it.copy(bubbles = v) } }
                 ToggleRow("Noms des applis", null, s.labels) { v -> launcher.updateSettings { it.copy(labels = v) } }
             }
-            Section("Dock") {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Places dans le dock", color = Holo.Ink, fontSize = 15.sp)
-                        Text("Le même dock sur les deux écrans", color = Holo.Muted, fontSize = 12.sp)
-                    }
-                    (3..6).forEach { n ->
-                        val on = s.dockSize == n
-                        Box(Modifier.padding(start = 6.dp).size(38.dp).clip(CircleShape)
-                            .then(if (on) Modifier.background(androidx.compose.ui.graphics.Brush.linearGradient(Holo.Iridescent), CircleShape) else Modifier.glass(CircleShape))
-                            .clickable { launcher.updateSettings { it.copy(dockSize = n) } }, contentAlignment = Alignment.Center) {
-                            Text("$n", color = if (on) Color(0xFF120A22) else Holo.Soft, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                        }
-                    }
-                }
+            Section("Écran externe") {
+                ChoiceRow("Colonnes", null, listOf(0, 3, 4, 5, 6), s.coverColumns) { v -> launcher.updateSettings { it.copy(coverColumns = v) } }
+                ChoiceRow("Lignes", null, listOf(0, 4, 5, 6, 7, 8), s.coverRows) { v -> launcher.updateSettings { it.copy(coverRows = v) } }
+                ChoiceRow("Applis dans le dock", "Les mêmes en premier sur l’écran interne", (3..6).toList(), s.dockSize) { v ->
+                    launcher.updateSettings { it.copy(dockSize = v, innerDockSize = maxOf(v, it.innerDockSize)) } }
+            }
+            Section("Écran interne") {
+                ChoiceRow("Colonnes", null, listOf(0, 3, 4, 5, 6, 7, 8), s.innerColumns) { v -> launcher.updateSettings { it.copy(innerColumns = v) } }
+                ChoiceRow("Lignes", null, listOf(0, 4, 5, 6, 7, 8, 9), s.innerRows) { v -> launcher.updateSettings { it.copy(innerRows = v) } }
+                ChoiceRow("Applis dans le dock", "Jusqu’à 10 ; celles en plus n’apparaissent que dépliées", (s.dockSize..10).toList(), s.innerDockSize.coerceAtLeast(s.dockSize)) { v ->
+                    launcher.updateSettings { it.copy(innerDockSize = v) } }
             }
             Section("Accueil") {
+                ToggleRow("Page Google Discover", "Tout à gauche : glisse vers la droite pour ouvrir Discover", s.discover) { v -> launcher.updateSettings { it.copy(discover = v) } }
                 ToggleRow("Ajouter les nouvelles applis", "Une appli installée apparaît sur les deux écrans", s.addNewApps) { v -> launcher.updateSettings { it.copy(addNewApps = v) } }
                 ToggleRow("Glisser vers le bas en haut de l’écran", "Ouvre les notifications (ailleurs : la recherche)", s.swipeDownNotifications) { v ->
                     launcher.updateSettings { it.copy(swipeDownNotifications = v) } }

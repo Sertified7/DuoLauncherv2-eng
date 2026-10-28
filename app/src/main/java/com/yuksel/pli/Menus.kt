@@ -190,10 +190,10 @@ fun AppMenu(request: MenuRequest, launcher: Launcher, currentScreen: Screen, onD
                     }
                 }
                 if (request.origin !is Origin.InFolder) {
-                    if (app.id in layout.dock) MenuRow(Icons.Rounded.Dock, "Retirer du dock") {
+                    if (app.id in layout.dockOf(screen)) MenuRow(Icons.Rounded.Dock, "Retirer du dock") {
                         launcher.update { LayoutEdits.removeFromDock(it, app.id, screen) }; onDismiss()
-                    } else if (layout.dock.size < launcher.settings.dockSize) MenuRow(Icons.Rounded.Dock, "Mettre dans le dock") {
-                        launcher.update { LayoutEdits.addToDock(it, app.id, launcher.settings.dockSize) }; onDismiss()
+                    } else if (layout.dockOf(screen).size < launcher.dockSizes.max(screen)) MenuRow(Icons.Rounded.Dock, "Mettre dans le dock") {
+                        launcher.update { LayoutEdits.addToDock(it, app.id, screen, launcher.dockSizes) }; onDismiss()
                     }
                 }
                 MenuRow(Icons.Rounded.Info, "Infos sur l’appli") { onInfo(app); onDismiss() }

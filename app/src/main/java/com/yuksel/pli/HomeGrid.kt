@@ -110,7 +110,7 @@ class DragState {
     private fun hit(p: Offset): DropSpot? {
         if (dockRect.contains(p)) {
             val index = (0 until dockCount).count { i -> dockCells[i]?.let { it.center.x < p.x } == true }
-            return DropSpot.Dock(index)
+            return DropSpot.Dock(screen, index)
         }
         if (!gridRect.contains(p)) return null
         val dragged = draggedId
@@ -134,7 +134,7 @@ class DragState {
 }
 
 /** Converts a spot on the visible lists into one on the saved lists, then applies the drop. */
-fun applyDrop(launcher: Launcher, source: DragSource, spot: DropSpot, visibleHome: List<String>, visibleDock: List<String>) {
+fun applyDrop(launcher: Launcher, source: DragSource, spot: DropSpot, visibleHome: List<String>) {
     val layout = launcher.layout
     fun layoutIndex(list: List<String>, visible: List<String>, vi: Int): Int = when {
         vi < visible.size -> list.indexOf(visible[vi]).coerceAtLeast(0)
@@ -144,9 +144,9 @@ fun applyDrop(launcher: Launcher, source: DragSource, spot: DropSpot, visibleHom
     val mapped = when (spot) {
         is DropSpot.Home -> DropSpot.Home(spot.screen, layoutIndex(layout.home(spot.screen), visibleHome, spot.index))
         is DropSpot.Into -> DropSpot.Into(spot.screen, layoutIndex(layout.home(spot.screen), visibleHome, spot.index))
-        is DropSpot.Dock -> DropSpot.Dock(layoutIndex(layout.dock, visibleDock, spot.index))
+        is DropSpot.Dock -> DropSpot.Dock(spot.screen, layoutIndex(layout.dockOf(spot.screen), launcher.visibleDock(spot.screen), spot.index))
     }
-    launcher.update { LayoutEdits.drop(it, source, mapped, launcher.settings.dockSize) }
+    launcher.update { LayoutEdits.drop(it, source, mapped, launcher.dockSizes) }
 }
 
 /** Press-and-hold then drag. A hold without moving opens the menu ([onHold]); moving starts the drag and closes it. */
@@ -165,12 +165,19 @@ data class GridMetrics(val columns: Int, val rows: Int, val icon: Dp, val cellHe
     val capacity get() = columns * rows
 }
 
-fun gridMetrics(width: Dp, height: Dp, labels: Boolean, wide: Boolean): GridMetrics {
-    val icon = if (wide) 62.dp else 60.dp
-    val columns = if (wide) ((width - 16.dp) / 100.dp).toInt().coerceIn(4, 6) else 4
-    val cell = icon + (if (labels) 24.dp else 8.dp) + 14.dp
-    val rows = (height / cell).toInt().coerceIn(1, 8)
-    return GridMetrics(columns, rows, icon, cell)
+fun gridMetrics(width: Dp, height: Dp, labels: Boolean, wide: Boolean, columns: Int = 0, rows: Int = 0): GridMetrics {
+    val label = if (labels) 24.dp else 8.dp
+    val gap = 14.dp
+    val autoIcon = if (wide) 62.dp else 60.dp
+    val cols = if (columns > 0) columns else if (wide) ((width - 16.dp) / 100.dp).toInt().coerceIn(4, 6) else 4
+    val autoCell = autoIcon + label + gap
+    val rowCount = if (rows > 0) rows else (height / autoCell).toInt().coerceIn(1, 8)
+    // Shrink icons when the chosen grid is denser than the default.
+    val byWidth = (width - 16.dp) / cols * .72f
+    val byHeight = height / rowCount - label - gap
+    val icon = minOf(autoIcon, byWidth, byHeight).coerceAtLeast(30.dp)
+    val cell = maxOf(icon + label + gap, height / rowCount).coerceAtMost(height / rowCount)
+    return GridMetrics(cols, rowCount, icon, cell)
 }
 
 /** The swipeable home pages of one screen: icons flow in order and fill each page. */
@@ -180,7 +187,7 @@ fun HomePages(
     drag: DragState, labels: Boolean, modifier: Modifier,
     onOpenApp: (AppInfo, Rect) -> Unit, onOpenFolder: (String) -> Unit,
     onMenu: (String, Rect, DragSource) -> Unit, onCloseMenu: () -> Unit, onEmptyHold: () -> Unit,
-    leadingPage: (@Composable () -> Unit)? = null,
+    leadingPage: (@Composable (Int) -> Unit)? = null,
 ) {
     val homePages = maxOf(1, (items.size + metrics.capacity - 1) / metrics.capacity)
     val scope = rememberCoroutineScope()
@@ -212,7 +219,7 @@ fun HomePages(
 
     HorizontalPager(pager, modifier.onGloballyPositioned { drag.gridRect = it.boundsInRoot() },
         beyondViewportPageCount = 8, key = { it }) { page ->
-        if (page < pageOffset) { leadingPage?.invoke(); return@HorizontalPager }
+        if (page < pageOffset) { leadingPage?.invoke(page); return@HorizontalPager }
         val homePage = page - pageOffset
         val first = homePage * metrics.capacity
         Column(Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
@@ -226,7 +233,7 @@ fun HomePages(
                                 detectTapGestures(onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEmptyHold() })
                             }) else HomeCell(id, index, screen, launcher, metrics.icon, labels, drag,
                                 onOpenApp, onOpenFolder, onMenu, onCloseMenu,
-                                onDrop = { drag.source?.let { s -> drag.spot?.let { sp -> applyDrop(launcher, s, sp, drag.homeIds, launcher.visibleDock()) } } })
+                                onDrop = { drag.source?.let { s -> drag.spot?.let { sp -> applyDrop(launcher, s, sp, drag.homeIds) } } })
                         }
                     }
                 }
@@ -310,22 +317,20 @@ fun FolderIcon(apps: List<AppInfo>, size: Dp, highlighted: Boolean = false) {
     }
 }
 
-/** Page dots: the "Aujourd'hui" page shows as a small sparkle-coloured dot on the left. */
+/** Page dots. The first [leading] dots (Discover, Aujourd'hui) are tinted cyan. */
 @Composable
-fun PageDots(pager: PagerState, count: Int, todayPage: Boolean, modifier: Modifier = Modifier) {
+fun PageDots(pager: PagerState, count: Int, leading: Int, modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     if (count <= 1) { Spacer(modifier.height(18.dp)); return }
     Row(modifier.height(18.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
         repeat(count) { i ->
             val current = pager.currentPage == i
             Box(Modifier.size(18.dp).clip(CircleShape).clickable { scope.launch { pager.animateScrollToPage(i) } }
-                .semantics { contentDescription = if (todayPage && i == 0) "Aujourd’hui" else "Page ${i + if (todayPage) 0 else 1}" },
+                .semantics { contentDescription = if (i < leading) "Page spéciale ${i + 1}" else "Page ${i - leading + 1}" },
                 contentAlignment = Alignment.Center) {
-                val dot = if (current) 7.dp else 5.dp
-                Box(Modifier.size(dot).background(
-                    if (current) Brush.linearGradient(Holo.Iridescent)
-                    else Brush.linearGradient(listOf(Color.White.copy(alpha = .35f), Color.White.copy(alpha = .35f))), CircleShape)
-                    .then(if (todayPage && i == 0 && !current) Modifier.background(Holo.Cyan.copy(alpha = .5f), CircleShape) else Modifier))
+                val color = when { current -> null; i < leading -> Holo.Cyan.copy(alpha = .55f); else -> Color.White.copy(alpha = .35f) }
+                Box(Modifier.size(if (current) 7.dp else 5.dp).background(
+                    if (color == null) Brush.linearGradient(Holo.Iridescent) else Brush.linearGradient(listOf(color, color)), CircleShape))
             }
         }
     }
@@ -334,11 +339,11 @@ fun PageDots(pager: PagerState, count: Int, todayPage: Boolean, modifier: Modifi
 /** The glass dock pill, shared by both screens. [onSearch] adds the search orb (cover screen). */
 @Composable
 fun Dock(
-    launcher: Launcher, drag: DragState, maxIcon: Dp, modifier: Modifier,
+    launcher: Launcher, screen: Screen, drag: DragState, maxIcon: Dp, modifier: Modifier,
     onOpenApp: (AppInfo, Rect) -> Unit, onMenu: (String, Rect, DragSource) -> Unit, onCloseMenu: () -> Unit,
     onSearch: (() -> Unit)?,
 ) {
-    val ids = launcher.visibleDock()
+    val ids = launcher.visibleDock(screen)
     drag.dockCount = ids.size
     val spot = drag.spot
     val haptic = LocalHapticFeedback.current
@@ -366,7 +371,7 @@ fun Dock(
                         .dragSource(drag, source, { bounds.topLeft },
                             onHold = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onMenu(id, bounds, source) },
                             onDragStarted = onCloseMenu,
-                            onDrop = { drag.source?.let { s -> drag.spot?.let { sp -> applyDrop(launcher, s, sp, drag.homeIds, launcher.visibleDock()) } } })
+                            onDrop = { drag.source?.let { s -> drag.spot?.let { sp -> applyDrop(launcher, s, sp, drag.homeIds) } } })
                         .alpha(if (dragged) .25f else 1f)
                         .drawBehind {
                             if (before) drawRoundRect(Brush.verticalGradient(Holo.Iridescent), Offset(-8.dp.toPx(), 4.dp.toPx()),

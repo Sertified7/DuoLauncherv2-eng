@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -30,6 +31,7 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -50,6 +52,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalContext
@@ -70,6 +73,9 @@ interface PliHost {
     fun requestPermission(permission: String)
     fun openNotificationAccess()
     fun expandNotifications()
+    /** True when the Google app is installed (its feed is Discover). */
+    val hasGoogleApp: Boolean
+    fun openDiscover()
 }
 
 /** Counters the activity bumps so the UI can react. */
@@ -81,19 +87,24 @@ class HostSignals {
 
 private enum class Panel { NONE, SEARCH, DRAWER, SETTINGS, WIDGETS, HOME_MENU }
 
-/** Swipe up / down on the home screen (only when nothing below used the gesture). */
-fun Modifier.homeSwipes(enabled: Boolean, onUp: () -> Unit, onDown: (Float) -> Unit): Modifier = pointerInput(enabled) {
+/**
+ * Swipe up / down on the home screen. It watches the touch before the icons and pages do
+ * (initial pass), so it works over icons too; a horizontal move is left to the pager.
+ */
+fun Modifier.homeSwipes(enabled: Boolean, blocked: () -> Boolean, onUp: () -> Unit, onDown: (Float) -> Unit): Modifier = pointerInput(enabled) {
     if (!enabled) return@pointerInput
-    val threshold = 56.dp.toPx()
+    val threshold = 44.dp.toPx()
     awaitEachGesture {
-        val down = awaitFirstDown(requireUnconsumed = false)
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
         var total = Offset.Zero
         while (true) {
-            val event = awaitPointerEvent()
+            val event = awaitPointerEvent(PointerEventPass.Initial)
             val change = event.changes.firstOrNull { it.id == down.id } ?: break
-            if (!change.pressed || change.isConsumed) break
+            if (!change.pressed || blocked()) break
             total += change.positionChange()
-            if (abs(total.y) > threshold && abs(total.y) > abs(total.x) * 1.4f) {
+            if (abs(total.x) > threshold && abs(total.x) > abs(total.y)) break
+            if (abs(total.y) > threshold && abs(total.y) > abs(total.x) * 1.3f) {
+                change.consume()
                 if (total.y < 0) onUp() else onDown(down.position.y / size.height.coerceAtLeast(1))
                 break
             }
@@ -167,8 +178,8 @@ fun PliApp(host: PliHost, signals: HostSignals) {
                 val current = if (wide) Screen.INNER else Screen.COVER
                 SideEffect { if (screen != current) { screen = current; drag.clear() } }
                 val swipesOn = panel == Panel.NONE && menu == null && folder == null && !drag.active
-                if (wide) key("inner") { InnerHome(host, signals, today, drag, actions, swipesOn, showToday) }
-                else key("cover") { CoverHome(host, signals, today, drag, actions, swipesOn, showToday) }
+                if (wide) key("inner", launcher.settings.discover) { InnerHome(host, signals, today, drag, actions, swipesOn, showToday) }
+                else key("cover", launcher.settings.discover) { CoverHome(host, signals, today, drag, actions, swipesOn, showToday) }
             }
             DragGhost(launcher, drag, if (screen == Screen.INNER) 62.dp else 60.dp)
 
@@ -263,7 +274,7 @@ private fun DefaultHomeBanner(onClick: () -> Unit, modifier: Modifier = Modifier
 }
 
 private fun swipeDown(host: PliHost, actions: HomeActions, fraction: Float) {
-    if (host.launcher.settings.swipeDownNotifications && fraction < .3f) actions.notifications() else actions.search()
+    if (host.launcher.settings.swipeDownNotifications && fraction < .15f) actions.notifications() else actions.search()
 }
 
 @Composable
@@ -271,76 +282,121 @@ private fun HomePressScroll(signals: HostSignals, pager: PagerState, firstHome: 
     LaunchedEffect(signals.homePresses) { if (signals.homePresses > 0 && pager.currentPage != firstHome) pager.animateScrollToPage(firstHome) }
 }
 
-/** Cover screen: big clock, the "Aujourd'hui" page on the left, home pages, dock with the search orb. */
+/** Landing on the far-left page opens Google Discover, then the pager steps back one page. */
+@Composable
+private fun DiscoverTrigger(host: PliHost, pager: PagerState, enabled: Boolean) {
+    LaunchedEffect(pager.settledPage, enabled) {
+        if (enabled && pager.settledPage == 0) {
+            host.openDiscover()
+            delay(450)
+            pager.scrollToPage(1)
+        }
+    }
+}
+
+@Composable
+private fun DiscoverPage() {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(Modifier.glass(RoundedCornerShape(30.dp), .06f).padding(horizontal = 30.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(Icons.Rounded.Explore, null, tint = Holo.Cyan, modifier = Modifier.size(34.dp))
+            Spacer(Modifier.height(10.dp))
+            IridescentText("Discover", 28.sp, letterSpacing = 0.sp, weight = androidx.compose.ui.text.font.FontWeight.Light)
+            Text("Ouverture de Google…", color = Holo.Muted, fontSize = 13.sp)
+        }
+    }
+}
+
+/** Cover screen: Discover and "Aujourd'hui" on the left, big clock, home pages, dock with the search orb. */
 @Composable
 private fun CoverHome(host: PliHost, signals: HostSignals, today: TodayState, drag: DragState, actions: HomeActions,
     swipesOn: Boolean, showToday: Int) {
     val launcher = host.launcher
     val items = launcher.visibleHome(Screen.COVER)
     val nowPlaying by MediaWatcher.nowPlaying.collectAsState()
-    Column(Modifier.fillMaxSize().homeSwipes(swipesOn, actions.drawer) { swipeDown(host, actions, it) }) {
+    val discover = launcher.settings.discover && host.hasGoogleApp
+    val lead = if (discover) 2 else 1
+    var homePages by remember { mutableIntStateOf(1) }
+    val pager = rememberPagerState(initialPage = lead) { lead + homePages + if (drag.active) 1 else 0 }
+    HomePressScroll(signals, pager, lead)
+    DiscoverTrigger(host, pager, discover)
+    LaunchedEffect(showToday) { if (showToday > 0) pager.animateScrollToPage(lead - 1) }
+    Column(Modifier.fillMaxSize().homeSwipes(swipesOn, { drag.source != null || pager.currentPage < lead }, actions.drawer) { swipeDown(host, actions, it) }) {
         ClockHeader(today, 84.sp, compact = false, Modifier.padding(start = 22.dp, end = 22.dp, top = 10.dp), onWeather = {})
         Spacer(Modifier.height(10.dp))
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-            val metrics = gridMetrics(maxWidth, maxHeight, launcher.settings.labels, wide = false)
-            val homePages = maxOf(1, (items.size + metrics.capacity - 1) / metrics.capacity)
-            val pager = rememberPagerState(initialPage = 1) { 1 + homePages + if (drag.active) 1 else 0 }
-            HomePressScroll(signals, pager, 1)
-            LaunchedEffect(showToday) { if (showToday > 0) pager.animateScrollToPage(0) }
+            val s = launcher.settings
+            val metrics = gridMetrics(maxWidth, maxHeight - 18.dp, s.labels, wide = false, s.coverColumns, s.coverRows)
+            val pages = maxOf(1, (items.size + metrics.capacity - 1) / metrics.capacity)
+            SideEffect { homePages = pages }
             Column(Modifier.fillMaxSize()) {
-                HomePages(Screen.COVER, launcher, items, metrics, pager, 1, drag, launcher.settings.labels, Modifier.weight(1f),
+                HomePages(Screen.COVER, launcher, items, metrics, pager, lead, drag, s.labels, Modifier.weight(1f),
                     onOpenApp = { a, r -> actions.open(a, r) }, onOpenFolder = actions.openFolder,
                     onMenu = actions.menu, onCloseMenu = actions.closeMenu, onEmptyHold = actions.emptyHold,
-                    leadingPage = {
-                        TodayColumn(launcher, host.widgets, today, actions.todayEditing(), Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                    leadingPage = { page ->
+                        if (discover && page == 0) DiscoverPage()
+                        else TodayColumn(launcher, host.widgets, today, actions.todayEditing(), Modifier.fillMaxSize().padding(horizontal = 16.dp),
                             onEditing = actions.setTodayEditing, onAddWidget = actions.addWidget, onPermission = host::requestPermission,
                             onNotificationAccess = host::openNotificationAccess, onSettings = actions.settings, onOpenPackage = host::openPackage)
                     })
                 val playing = nowPlaying
-                if (playing != null && pager.currentPage >= 1) NowPlayingCard(playing, Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                if (playing != null && pager.currentPage >= lead) NowPlayingCard(playing, Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
                     host.openPackage(playing.packageName)
                 }
-                PageDots(pager, pager.pageCount, todayPage = true, modifier = Modifier.align(Alignment.CenterHorizontally))
+                PageDots(pager, pager.pageCount, lead, modifier = Modifier.align(Alignment.CenterHorizontally))
             }
         }
         if (!signals.isDefaultHome) DefaultHomeBanner(host::requestDefaultHome, Modifier.align(Alignment.CenterHorizontally).padding(bottom = 8.dp))
-        Dock(launcher, drag, 54.dp, Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
+        Dock(launcher, Screen.COVER, drag, 54.dp, Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
             onOpenApp = { a, r -> actions.open(a, r) }, onMenu = actions.menu, onCloseMenu = actions.closeMenu, onSearch = actions.search)
     }
 }
 
-/** Inner screen: "Aujourd'hui" on the left half, home on the right half; the split sits on the hinge. */
+/** Inner screen: "Aujourd'hui" on the left half, home on the right half (split on the hinge), wide dock below both. */
 @Composable
 private fun InnerHome(host: PliHost, signals: HostSignals, today: TodayState, drag: DragState, actions: HomeActions,
-    swipesOn: Boolean, showToday: Int) {
+    swipesOn: Boolean, @Suppress("UNUSED_PARAMETER") showToday: Int) {
     val launcher = host.launcher
     val items = launcher.visibleHome(Screen.INNER)
-    Row(Modifier.fillMaxSize()) {
-        TodayColumn(launcher, host.widgets, today, actions.todayEditing(),
-            Modifier.weight(1f).fillMaxHeight().padding(start = 24.dp, end = 22.dp, top = 14.dp),
-            onEditing = actions.setTodayEditing, onAddWidget = actions.addWidget, onPermission = host::requestPermission,
-            onNotificationAccess = host::openNotificationAccess, onSettings = actions.settings, onOpenPackage = host::openPackage)
-        Box(Modifier.width(2.dp).fillMaxHeight(.72f).align(Alignment.CenterVertically)
-            .background(Brush.verticalGradient(listOf(Color.Transparent, Holo.Violet.copy(alpha = .35f), Color.Transparent))))
-        Column(Modifier.weight(1f).fillMaxHeight().homeSwipes(swipesOn, actions.drawer) { swipeDown(host, actions, it) }) {
-            ClockHeader(today, 66.sp, compact = true, Modifier.padding(start = 26.dp, end = 22.dp, top = 14.dp), onWeather = {},
-                trailing = { SearchOrb(52.dp, actions.search) })
-            Spacer(Modifier.height(16.dp))
-            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-                val metrics = gridMetrics(maxWidth, maxHeight - 18.dp, launcher.settings.labels, wide = true)
-                val homePages = maxOf(1, (items.size + metrics.capacity - 1) / metrics.capacity)
-                val pager = rememberPagerState(initialPage = 0) { homePages + if (drag.active) 1 else 0 }
-                HomePressScroll(signals, pager, 0)
-                Column(Modifier.fillMaxSize()) {
-                    HomePages(Screen.INNER, launcher, items, metrics, pager, 0, drag, launcher.settings.labels, Modifier.weight(1f).padding(horizontal = 8.dp),
-                        onOpenApp = { a, r -> actions.open(a, r) }, onOpenFolder = actions.openFolder,
-                        onMenu = actions.menu, onCloseMenu = actions.closeMenu, onEmptyHold = actions.emptyHold)
-                    PageDots(pager, pager.pageCount, todayPage = false, modifier = Modifier.align(Alignment.CenterHorizontally))
+    val discover = launcher.settings.discover && host.hasGoogleApp
+    val lead = if (discover) 1 else 0
+    var homePages by remember { mutableIntStateOf(1) }
+    val pager = rememberPagerState(initialPage = lead) { lead + homePages + if (drag.active) 1 else 0 }
+    HomePressScroll(signals, pager, lead)
+    DiscoverTrigger(host, pager, discover)
+    Column(Modifier.fillMaxSize()) {
+        Row(Modifier.weight(1f).fillMaxWidth()) {
+            TodayColumn(launcher, host.widgets, today, actions.todayEditing(),
+                Modifier.weight(1f).fillMaxHeight().padding(start = 24.dp, end = 22.dp, top = 14.dp),
+                onEditing = actions.setTodayEditing, onAddWidget = actions.addWidget, onPermission = host::requestPermission,
+                onNotificationAccess = host::openNotificationAccess, onSettings = actions.settings, onOpenPackage = host::openPackage)
+            Box(Modifier.width(2.dp).fillMaxHeight(.72f).align(Alignment.CenterVertically)
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Holo.Violet.copy(alpha = .35f), Color.Transparent))))
+            Column(Modifier.weight(1f).fillMaxHeight()
+                .homeSwipes(swipesOn, { drag.source != null || pager.currentPage < lead }, actions.drawer) { swipeDown(host, actions, it) }) {
+                ClockHeader(today, 66.sp, compact = true, Modifier.padding(start = 26.dp, end = 22.dp, top = 14.dp), onWeather = {},
+                    trailing = { SearchOrb(52.dp, actions.search) })
+                Spacer(Modifier.height(16.dp))
+                BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                    val s = launcher.settings
+                    val metrics = gridMetrics(maxWidth - 16.dp, maxHeight - 18.dp, s.labels, wide = true, s.innerColumns, s.innerRows)
+                    val pages = maxOf(1, (items.size + metrics.capacity - 1) / metrics.capacity)
+                    SideEffect { homePages = pages }
+                    Column(Modifier.fillMaxSize()) {
+                        HomePages(Screen.INNER, launcher, items, metrics, pager, lead, drag, s.labels, Modifier.weight(1f).padding(horizontal = 8.dp),
+                            onOpenApp = { a, r -> actions.open(a, r) }, onOpenFolder = actions.openFolder,
+                            onMenu = actions.menu, onCloseMenu = actions.closeMenu, onEmptyHold = actions.emptyHold,
+                            leadingPage = { DiscoverPage() })
+                        PageDots(pager, pager.pageCount, lead, modifier = Modifier.align(Alignment.CenterHorizontally))
+                    }
                 }
             }
-            if (!signals.isDefaultHome) DefaultHomeBanner(host::requestDefaultHome, Modifier.align(Alignment.CenterHorizontally).padding(bottom = 8.dp))
-            Dock(launcher, drag, 56.dp, Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, bottom = 12.dp),
-                onOpenApp = { a, r -> actions.open(a, r) }, onMenu = actions.menu, onCloseMenu = actions.closeMenu, onSearch = null)
         }
+        if (!signals.isDefaultHome) DefaultHomeBanner(host::requestDefaultHome, Modifier.align(Alignment.CenterHorizontally).padding(bottom = 8.dp))
+        val dockCount = launcher.visibleDock(Screen.INNER).size.coerceAtLeast(3)
+        Dock(launcher, Screen.INNER, drag, 58.dp,
+            Modifier.align(Alignment.CenterHorizontally).widthIn(max = (dockCount * 78 + 40).dp).fillMaxWidth()
+                .padding(start = 18.dp, end = 18.dp, bottom = 12.dp, top = 6.dp),
+            onOpenApp = { a, r -> actions.open(a, r) }, onMenu = actions.menu, onCloseMenu = actions.closeMenu, onSearch = null)
     }
 }

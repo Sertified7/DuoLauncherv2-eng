@@ -234,7 +234,7 @@ fun SearchPanel(launcher: Launcher, modifier: Modifier, onOpen: (AppInfo, Rect?)
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() }; keyboard?.show() }
     val apps = launcher.visibleApps
     val matches = remember(query, apps) { matchApps(apps, query).take(8) }
-    val suggestions = remember(apps) { UsageLog.suggestions(context, launcher.byId, 8).ifEmpty { launcher.visibleDock().mapNotNull(launcher.byId::get) } }
+    val suggestions = remember(apps) { UsageLog.suggestions(context, launcher.byId, 8).ifEmpty { launcher.visibleDock(Screen.COVER).mapNotNull(launcher.byId::get) } }
     val calc = remember(query) { evaluateCalculation(query) }
     val contactsAllowed = context.checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
     val contacts by produceState(emptyList<Contact>(), query, contactsAllowed) { value = searchContacts(context, query) }
