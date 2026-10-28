@@ -229,12 +229,13 @@ fun AppMenu(request: MenuRequest, launcher: Launcher, currentScreen: Screen, onD
 /** Long press on an empty spot of the home screen. */
 @Composable
 fun HomeMenu(onDismiss: () -> Unit, onWidgets: (() -> Unit)?, onSettings: () -> Unit, onApps: () -> Unit, onToday: (() -> Unit)?,
-    onAddPage: () -> Unit, onDeletePage: (() -> Unit)?, onSelect: () -> Unit = {}) {
+    onAddPage: () -> Unit, onDeletePage: (() -> Unit)?, onSelect: () -> Unit = {}, onAddApps: () -> Unit = {}) {
     Box(Modifier.fillMaxSize()) {
         Scrim(.35f, onDismiss)
         Anchored(Rect.Zero) {
             MenuCard {
                 Text("Pli", color = Holo.Muted, fontSize = 12.sp, letterSpacing = 2.sp, modifier = Modifier.padding(10.dp))
+                MenuRow(Icons.Rounded.AddToHomeScreen, "Ajouter des applis") { onDismiss(); onAddApps() }
                 MenuRow(Icons.Rounded.Checklist, "Sélectionner des applis") { onDismiss(); onSelect() }
                 MenuRow(Icons.Rounded.AddBox, "Ajouter une page") { onDismiss(); onAddPage() }
                 if (onDeletePage != null) MenuRow(Icons.Rounded.DeleteSweep, "Supprimer cette page", Holo.Pink) { onDismiss(); onDeletePage() }

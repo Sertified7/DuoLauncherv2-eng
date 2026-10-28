@@ -286,6 +286,14 @@ object LayoutEdits {
         layout.copy(dock = layout.dock - ids, dockExtra = layout.dockExtra - ids, folders = layout.folders - ids)
             .withHome(screen, blank(layout.home(screen), ids))
 
+    /** Adds several apps at once, filling free slots from [fromSlot] (the page the user was on). */
+    fun addMany(layout: HomeLayout, screen: Screen, ids: List<String>, fromSlot: Int): HomeLayout {
+        val placed = layout.placedApps(screen)
+        var list = layout.home(screen)
+        ids.filter { it !in placed }.distinct().forEach { id -> list = place(list, firstFree(list, fromSlot), id) }
+        return withPagesFor(layout.withHome(screen, list), screen)
+    }
+
     /** Adds an empty page at the end. */
     fun addPage(layout: HomeLayout, screen: Screen) = layout.withPages(screen, layout.pages(screen) + 1)
 

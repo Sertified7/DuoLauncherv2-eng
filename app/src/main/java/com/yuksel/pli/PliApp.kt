@@ -100,7 +100,7 @@ class HostSignals {
     var isDefaultHome by mutableStateOf(true)
 }
 
-private enum class Panel { NONE, SEARCH, DRAWER, SETTINGS, WIDGETS, HOME_MENU }
+private enum class Panel { NONE, SEARCH, DRAWER, SETTINGS, WIDGETS, HOME_MENU, ADD_APPS }
 
 /**
  * Swipe up / down on the home screen. It watches the touch before the icons and pages do
@@ -254,6 +254,13 @@ fun PliApp(host: PliHost, signals: HostSignals) {
                         onClose = { panel = Panel.NONE }, onRequestContacts = { host.requestPermission(android.Manifest.permission.READ_CONTACTS) })
                 }
             }
+            FullPanel(panel == Panel.ADD_APPS) { m ->
+                val (addScreen, page, cap) = homeMenu
+                AddAppsPanel(launcher, addScreen, m, onAdd = { ids ->
+                    launcher.update { LayoutEdits.addMany(it, addScreen, ids, page * cap) }
+                    panel = Panel.NONE
+                }, onClose = { panel = Panel.NONE })
+            }
             FullPanel(panel == Panel.DRAWER) {
                 AppDrawer(launcher, it, { app, r -> open(app, r) }, onHold = { app, r -> menu = MenuRequest(app.id, r, Origin.Drawer) },
                     onClose = { panel = Panel.NONE })
@@ -294,6 +301,7 @@ fun PliApp(host: PliHost, signals: HostSignals) {
                     onToday = if (menuScreen == Screen.INNER) ({ todayEditing = true }) else null,
                     onAddPage = { launcher.update { LayoutEdits.addPage(it, menuScreen) } },
                     onSelect = { selection.start(null) },
+                    onAddApps = { panel = Panel.ADD_APPS },
                     onDeletePage = if (pageEmpty && launcher.layout.pages(menuScreen) > 1)
                         ({ launcher.update { LayoutEdits.deletePage(it, menuScreen, page, cap) } }) else null)
             }

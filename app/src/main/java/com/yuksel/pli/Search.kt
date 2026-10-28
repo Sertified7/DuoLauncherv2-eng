@@ -83,6 +83,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.boundsInRoot
@@ -383,6 +384,51 @@ fun Modifier.swipeDownToClose(atTop: () -> Boolean, onClose: () -> Unit): Modifi
                 if (total.y > threshold && total.y > abs(total.x) * 1.3f) {
                     change.consume(); close.value(); break
                 }
+            }
+        }
+    }
+}
+
+/** Pick several apps at once and put them on the home screen. */
+@Composable
+fun AddAppsPanel(launcher: Launcher, screen: Screen, modifier: Modifier, onAdd: (List<String>) -> Unit, onClose: () -> Unit) {
+    var filter by rememberSaveable { mutableStateOf("") }
+    val picked = remember { androidx.compose.runtime.mutableStateListOf<String>() }
+    val placed = launcher.layout.placedApps(screen)
+    val apps = launcher.visibleApps
+    val shown = remember(filter, apps) { if (filter.isBlank()) apps else matchApps(apps, filter) }
+        .sortedBy { it.id in placed }
+    val grid = rememberLazyGridState()
+    Column(modifier.swipeDownToClose({ grid.firstVisibleItemIndex == 0 && grid.firstVisibleItemScrollOffset == 0 }, onClose)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IridescentText("Ajouter à l’accueil", 26.sp, Modifier.weight(1f), letterSpacing = (-.3).sp)
+            PillButton("Fermer", onClick = onClose)
+        }
+        Text(if (screen == Screen.INNER) "Écran interne" else "Écran externe", color = Holo.Muted, fontSize = 12.sp)
+        Spacer(Modifier.height(12.dp))
+        GlassField(filter, { filter = it }, "Filtrer les applis", null, Modifier.fillMaxWidth())
+        Spacer(Modifier.height(12.dp))
+        LazyVerticalGrid(GridCells.Adaptive(86.dp), Modifier.weight(1f).fillMaxWidth(), grid) {
+            items(shown, key = { it.id }) { app ->
+                val already = app.id in placed
+                val on = app.id in picked
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
+                    .clickable(enabled = !already) { if (on) picked.remove(app.id) else picked.add(app.id) }
+                    .padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(Modifier.graphicsLayer { alpha = if (already) .35f else 1f }) {
+                        AppIcon(app, 56.dp, showBadge = false)
+                        if (!already) SelectMark(on, Modifier.align(Alignment.TopStart))
+                    }
+                    IconLabel(if (already) "${app.label} ✓" else app.label)
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            if (picked.isNotEmpty()) Text("Tout désélectionner", color = Holo.Violet, fontSize = 14.sp,
+                modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable { picked.clear() }.padding(10.dp))
+            Spacer(Modifier.weight(1f))
+            PillButton(if (picked.isEmpty()) "Choisis des applis" else "Ajouter (${picked.size})", highlighted = picked.isNotEmpty()) {
+                if (picked.isNotEmpty()) onAdd(picked.toList())
             }
         }
     }
