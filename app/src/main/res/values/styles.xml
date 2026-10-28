@@ -1,23 +1,12 @@
 <resources>
-    <style name="Theme.Duo" parent="android:style/Theme.Material.Light.NoActionBar">
-        <item name="android:fontFamily">sans</item>
+    <style name="Theme.Pli" parent="android:style/Theme.Material.NoActionBar">
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
-        <item name="android:windowActionModeOverlay">true</item>
-        <item name="android:windowBackground">#567587</item>
-        <item name="android:colorAccent">#30596D</item>
-    </style>
-    <style name="Theme.Duo.StandBy" parent="Theme.Duo">
-        <item name="android:windowBackground">#000000</item>
-        <item name="android:windowFullscreen">true</item>
-    </style>
-    <style name="Theme.Duo.Discover" parent="Theme.Duo">
-        <item name="android:windowDisablePreview">true</item>
-    </style>
-    <style name="Theme.Duo.LiveDiscover" parent="Theme.Duo.Discover">
-        <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
-        <item name="android:backgroundDimEnabled">false</item>
-        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:colorAccent">#C7A6FF</item>
+        <item name="android:windowShowWallpaper">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">always</item>
     </style>
 </resources>

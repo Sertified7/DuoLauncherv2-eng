@@ -1,0 +1,272 @@
+package com.yuksel.pli
+
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AddToHomeScreen
+import androidx.compose.material.icons.rounded.Apps
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.DriveFileRenameOutline
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Logout
+import androidx.compose.material.icons.rounded.RemoveCircleOutline
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material.icons.rounded.ViewDay
+import androidx.compose.material.icons.rounded.Widgets
+import androidx.compose.material.icons.rounded.Dock
+import androidx.compose.material.icons.rounded.CallSplit
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
+
+/** Where a long-pressed item lives, which decides the menu's actions. */
+sealed interface Origin {
+    data class Home(val screen: Screen) : Origin
+    data object Dock : Origin
+    data object Drawer : Origin
+    data class InFolder(val folderId: String, val screen: Screen) : Origin
+}
+
+data class MenuRequest(val id: String, val bounds: Rect, val origin: Origin)
+
+/** Dims the screen; a tap outside closes. */
+@Composable
+fun Scrim(alpha: Float = .45f, onDismiss: () -> Unit) {
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = alpha))
+        .clickable(remember { MutableInteractionSource() }, null, onClick = onDismiss))
+}
+
+/** Places its content below [anchor], or above it when there is no room. */
+@Composable
+fun Anchored(anchor: Rect, content: @Composable () -> Unit) {
+    Layout(content, Modifier.fillMaxSize()) { measurables, constraints ->
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val placeable = measurables.first().measure(loose)
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            val margin = 12.dp.roundToPx()
+            val x = (anchor.center.x - placeable.width / 2f).roundToInt().coerceIn(margin, (constraints.maxWidth - placeable.width - margin).coerceAtLeast(margin))
+            val below = anchor.bottom.roundToInt() + margin
+            val y = if (anchor == Rect.Zero) (constraints.maxHeight - placeable.height) / 2
+                else if (below + placeable.height < constraints.maxHeight - margin) below
+                else (anchor.top.roundToInt() - margin - placeable.height).coerceAtLeast(margin)
+            placeable.place(x, y)
+        }
+    }
+}
+
+@Composable
+private fun MenuRow(icon: ImageVector, text: String, tint: Color = Holo.Ink, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick)
+        .padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(text, color = tint, fontSize = 15.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Icon(icon, null, tint = tint.copy(alpha = .85f), modifier = Modifier.size(20.dp))
+    }
+}
+
+@Composable
+private fun MenuCard(content: @Composable () -> Unit) {
+    Column(Modifier.width(270.dp).halo(Holo.Violet.copy(alpha = .14f), 24.dp).clip(RoundedCornerShape(28.dp))
+        .background(Holo.Panel.copy(alpha = .94f)).border(1.dp, Holo.edgeBrush, RoundedCornerShape(28.dp))
+        .clickable(remember { MutableInteractionSource() }, null) {}.padding(8.dp)) { content() }
+}
+
+@Composable
+private fun Divider() {
+    Box(Modifier.padding(vertical = 4.dp, horizontal = 10.dp).fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = .1f)))
+}
+
+/** The long-press menu of an app: its shortcuts, then home/dock/folder actions. */
+@Composable
+fun AppMenu(request: MenuRequest, launcher: Launcher, currentScreen: Screen, onDismiss: () -> Unit,
+    onRenameFolder: (String) -> Unit, onUninstall: (AppInfo) -> Unit, onInfo: (AppInfo) -> Unit) {
+    val context = LocalContext.current
+    Box(Modifier.fillMaxSize()) {
+        Scrim(.35f, onDismiss)
+        Anchored(request.bounds) {
+            MenuCard {
+                val folder = if (HomeLayout.isFolder(request.id)) launcher.layout.folders[request.id] else null
+                if (folder != null) {
+                    Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        FolderIcon(launcher.folderApps(folder.id), 40.dp)
+                        Text(folder.title, color = Holo.Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 12.dp))
+                    }
+                    Divider()
+                    MenuRow(Icons.Rounded.DriveFileRenameOutline, "Renommer") { onRenameFolder(folder.id); onDismiss() }
+                    MenuRow(Icons.Rounded.CallSplit, "Défaire le dossier") {
+                        launcher.update { l ->
+                            val screen = (request.origin as? Origin.Home)?.screen ?: currentScreen
+                            val list = l.home(screen)
+                            val apps = l.folders[folder.id]?.apps ?: emptyList()
+                            l.withHome(screen, list.flatMap { if (it == folder.id) apps else listOf(it) }).copy(folders = l.folders - folder.id)
+                        }
+                        onDismiss()
+                    }
+                    MenuRow(Icons.Rounded.RemoveCircleOutline, "Retirer de l’accueil", Holo.Pink) {
+                        val screen = (request.origin as? Origin.Home)?.screen ?: currentScreen
+                        launcher.update { l -> l.withHome(screen, l.home(screen) - folder.id).copy(folders = l.folders - folder.id) }
+                        onDismiss()
+                    }
+                    return@MenuCard
+                }
+                val app = launcher.byId[request.id] ?: run { onDismiss(); return@MenuCard }
+                Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    AppIcon(app, 40.dp, showBadge = false)
+                    Column(Modifier.padding(start = 12.dp)) {
+                        Text(app.label, color = Holo.Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (app.work) Text("Profil professionnel", color = Holo.Muted, fontSize = 12.sp)
+                    }
+                }
+                val shortcuts by produceState(emptyList<AppShortcut>(), app.id) {
+                    value = withContext(Dispatchers.IO) { loadAppShortcuts(context, app) }
+                }
+                if (shortcuts.isNotEmpty()) {
+                    Divider()
+                    shortcuts.forEach { s ->
+                        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(16.dp))
+                            .clickable { startAppShortcut(context, s); onDismiss() }.padding(horizontal = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text(s.label, color = Holo.Ink, fontSize = 15.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (s.icon != null) Image(s.icon, null, Modifier.size(22.dp).clip(CircleShape))
+                        }
+                    }
+                }
+                Divider()
+                val layout = launcher.layout
+                val screen = when (val o = request.origin) { is Origin.Home -> o.screen; is Origin.InFolder -> o.screen; else -> currentScreen }
+                when (val o = request.origin) {
+                    is Origin.InFolder -> MenuRow(Icons.Rounded.Logout, "Sortir du dossier") {
+                        launcher.update { LayoutEdits.moveOutOfFolder(it, o.screen, o.folderId, app.id) }; onDismiss()
+                    }
+                    is Origin.Home -> MenuRow(Icons.Rounded.RemoveCircleOutline, "Retirer de l’accueil") {
+                        launcher.update { LayoutEdits.removeFromHome(it, o.screen, app.id) }; onDismiss()
+                    }
+                    else -> if (app.id !in layout.placedApps(screen)) MenuRow(Icons.Rounded.AddToHomeScreen, "Ajouter à l’accueil") {
+                        launcher.update { LayoutEdits.addToHome(it, screen, app.id) }; onDismiss()
+                    }
+                }
+                if (request.origin !is Origin.InFolder) {
+                    if (app.id in layout.dock) MenuRow(Icons.Rounded.Dock, "Retirer du dock") {
+                        launcher.update { LayoutEdits.removeFromDock(it, app.id, screen) }; onDismiss()
+                    } else if (layout.dock.size < launcher.settings.dockSize) MenuRow(Icons.Rounded.Dock, "Mettre dans le dock") {
+                        launcher.update { LayoutEdits.addToDock(it, app.id, launcher.settings.dockSize) }; onDismiss()
+                    }
+                }
+                MenuRow(Icons.Rounded.Info, "Infos sur l’appli") { onInfo(app); onDismiss() }
+                MenuRow(Icons.Rounded.VisibilityOff, "Masquer l’appli") { launcher.hide(app); onDismiss() }
+                MenuRow(Icons.Rounded.Delete, "Désinstaller", Holo.Pink) { onUninstall(app); onDismiss() }
+            }
+        }
+    }
+}
+
+/** Long press on an empty spot of the home screen. */
+@Composable
+fun HomeMenu(onDismiss: () -> Unit, onWidgets: () -> Unit, onSettings: () -> Unit, onApps: () -> Unit, onToday: () -> Unit) {
+    Box(Modifier.fillMaxSize()) {
+        Scrim(.35f, onDismiss)
+        Anchored(Rect.Zero) {
+            MenuCard {
+                Text("Pli", color = Holo.Muted, fontSize = 12.sp, letterSpacing = 2.sp, modifier = Modifier.padding(10.dp))
+                MenuRow(Icons.Rounded.Widgets, "Ajouter un widget") { onDismiss(); onWidgets() }
+                MenuRow(Icons.Rounded.ViewDay, "Modifier « Aujourd’hui »") { onDismiss(); onToday() }
+                MenuRow(Icons.Rounded.Apps, "Toutes les applis") { onDismiss(); onApps() }
+                MenuRow(Icons.Rounded.Tune, "Réglages de Pli") { onDismiss(); onSettings() }
+            }
+        }
+    }
+}
+
+/** An open folder: its name (editable) and its apps. */
+@Composable
+fun FolderPanel(folderId: String, screen: Screen, launcher: Launcher, startRenaming: Boolean, onDismiss: () -> Unit,
+    onOpen: (AppInfo, Rect) -> Unit, onHold: (MenuRequest) -> Unit) {
+    val folder = launcher.layout.folders[folderId] ?: run { onDismiss(); return }
+    var title by remember(folderId) { mutableStateOf(folder.title) }
+    var renaming by remember(folderId) { mutableStateOf(startRenaming) }
+    val apps = launcher.folderApps(folderId)
+    fun save() { if (title.isNotBlank() && title != folder.title) launcher.update { l ->
+        l.copy(folders = l.folders + (folderId to folder.copy(title = title.trim()))) } }
+    Box(Modifier.fillMaxSize()) {
+        Scrim(.5f) { save(); onDismiss() }
+        Column(Modifier.align(Alignment.Center).widthIn(max = 380.dp).fillMaxWidth().padding(24.dp)
+            .halo(Holo.Violet.copy(alpha = .12f), 30.dp).clip(RoundedCornerShape(34.dp)).background(Holo.Panel.copy(alpha = .9f))
+            .border(1.dp, Holo.edgeBrush, RoundedCornerShape(34.dp))
+            .clickable(remember { MutableInteractionSource() }, null) {}.padding(20.dp)) {
+            if (renaming) BasicTextField(title, { title = it }, Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                singleLine = true, textStyle = TextStyle(color = Holo.Ink, fontSize = 24.sp, fontWeight = FontWeight.Light),
+                cursorBrush = SolidColor(Holo.Violet))
+            else Box(Modifier.fillMaxWidth().padding(bottom = 16.dp).clickable { renaming = true }) {
+                IridescentText(title, 26.sp, letterSpacing = 0.sp, weight = FontWeight.Light)
+            }
+            apps.chunked(4).forEach { row ->
+                Row(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                    row.forEach { app ->
+                        var bounds by remember { mutableStateOf(Rect.Zero) }
+                        Column(Modifier.weight(1f)
+                            .then(Modifier.onBounds { bounds = it })
+                            .clip(RoundedCornerShape(18.dp))
+                            .combinedClick(onClick = { save(); onOpen(app, bounds) },
+                                onLongClick = { onHold(MenuRequest(app.id, bounds, Origin.InFolder(folderId, screen))) })
+                            .padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            AppIcon(app, 56.dp)
+                            IconLabel(app.label)
+                        }
+                    }
+                    repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+            Text("Maintiens une appli pour la sortir du dossier.", color = Holo.Muted, fontSize = 12.sp,
+                modifier = Modifier.padding(top = 4.dp))
+        }
+    }
+}
+
+fun Modifier.onBounds(block: (Rect) -> Unit): Modifier = onGloballyPositioned { block(it.boundsInRoot()) }
+
+fun Modifier.combinedClick(onClick: () -> Unit, onLongClick: () -> Unit): Modifier =
+    combinedClickable(onClick = onClick, onLongClick = onLongClick)

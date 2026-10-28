@@ -1,5 +1,3 @@
 <resources>
-    <string name="dune_wallpaper_description">Dunes Duo — le paysage du lanceur, adapté à votre écran.</string>
-    <string name="shade_service_label">Gestes du volet Duo Launcher</string>
-    <string name="shade_service_description">Permet aux gestes de l’écran d’accueil de Duo Launcher d’ouvrir les notifications et les réglages rapides du système. Ce service ne lit pas le contenu de l’écran et n’observe pas l’activité des autres applis.</string>
+    <string name="app_name">Pli</string>
 </resources>

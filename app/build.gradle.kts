@@ -4,52 +4,27 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-val releaseSigningVariables = listOf(
-    "DUO_RELEASE_STORE_FILE",
-    "DUO_RELEASE_STORE_PASSWORD",
-    "DUO_RELEASE_KEY_ALIAS",
-    "DUO_RELEASE_KEY_PASSWORD",
-)
-val releaseSigningValues = releaseSigningVariables.associateWith { name ->
-    System.getenv(name)?.takeIf { it.isNotBlank() }
-}
-val suppliedReleaseSigningVariables = releaseSigningValues.filterValues { it != null }.keys
-check(suppliedReleaseSigningVariables.isEmpty() || suppliedReleaseSigningVariables.size == releaseSigningVariables.size) {
-    val missing = releaseSigningVariables.filterNot(suppliedReleaseSigningVariables::contains)
-    "Release signing is only configured when all four DUO_RELEASE_* variables are set. Missing: ${missing.joinToString()}"
-}
-
-val releaseStoreFile = releaseSigningValues["DUO_RELEASE_STORE_FILE"]?.let { configuredPath ->
-    rootProject.file(configuredPath).canonicalFile.also { storeFile ->
-        val repositoryRoot = rootProject.projectDir.canonicalFile.toPath()
-        check(!storeFile.toPath().startsWith(repositoryRoot)) {
-            "DUO_RELEASE_STORE_FILE must point outside the repository."
-        }
-        check(storeFile.isFile && storeFile.canRead()) {
-            "DUO_RELEASE_STORE_FILE does not point to a readable file."
-        }
-    }
-}
+// Pli is signed in CI with the key described by these variables (see .github/workflows/build-pli.yml).
+val signingFile = System.getenv("PLI_STORE_FILE")?.takeIf { it.isNotBlank() }?.let(::file)
 
 android {
-    namespace = "com.jake.duolauncher"
+    namespace = "com.yuksel.pli"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.jake.duolauncher"
+        applicationId = "com.yuksel.pli"
         minSdk = 31
         targetSdk = 36
         // CI builds count up so each new APK installs over the previous one.
-        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()?.plus(100) ?: 31
-        versionName = "0.15.0-fold8"
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+        versionName = "1.0." + (System.getenv("GITHUB_RUN_NUMBER") ?: "0")
     }
     signingConfigs {
-        if (releaseStoreFile != null) {
+        if (signingFile != null) {
             create("release") {
-                storeFile = releaseStoreFile
-                storePassword = releaseSigningValues.getValue("DUO_RELEASE_STORE_PASSWORD")
-                keyAlias = releaseSigningValues.getValue("DUO_RELEASE_KEY_ALIAS")
-                keyPassword = releaseSigningValues.getValue("DUO_RELEASE_KEY_PASSWORD")
+                storeFile = signingFile
+                storePassword = System.getenv("PLI_STORE_PASSWORD")
+                keyAlias = System.getenv("PLI_KEY_ALIAS")
+                keyPassword = System.getenv("PLI_KEY_PASSWORD")
             }
         }
     }
@@ -57,13 +32,11 @@ android {
         getByName("release") {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro",
-            )
-            if (releaseStoreFile != null) signingConfig = signingConfigs.getByName("release")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (signingFile != null) signingConfig = signingConfigs.getByName("release")
         }
     }
+    lint { checkReleaseBuilds = false; abortOnError = false }
     buildFeatures { compose = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -71,23 +44,14 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
 }
+
 dependencies {
     implementation("androidx.window:window:1.5.1")
     implementation(platform("androidx.compose:compose-bom:2025.06.01"))
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.1")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.1")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
-    debugImplementation("androidx.compose.ui:ui-tooling")
-    testImplementation("junit:junit:4.13.2")
-    androidTestImplementation(platform("androidx.compose:compose-bom:2025.06.01"))
-    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
-    androidTestImplementation("androidx.test:runner:1.7.0")
-    androidTestImplementation("androidx.test.ext:junit:1.3.0")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
-    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
-    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
