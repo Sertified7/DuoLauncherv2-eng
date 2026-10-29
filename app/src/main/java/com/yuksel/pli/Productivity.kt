@@ -57,7 +57,7 @@ import org.json.JSONObject
 import java.time.LocalDate
 import java.time.ZoneId
 
-// ---------- Rappels (to-do list) ----------
+// ---------- Reminders (to-do list) ----------
 
 data class Task(val id: Long, val text: String, val done: Boolean)
 
@@ -73,7 +73,7 @@ private object TaskStore {
     }
 }
 
-/** "Rappels": a small checklist. Tap a circle to tick, × to delete. */
+/** "Reminders": a small checklist. Tap a circle to tick, × to delete. */
 @Composable
 fun TasksCard() {
     val context = LocalContext.current
@@ -87,9 +87,9 @@ fun TasksCard() {
     }
     Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(28.dp), .05f).padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("RAPPELS", color = Holo.Muted, fontSize = 11.sp, letterSpacing = 2.5.sp, modifier = Modifier.weight(1f))
+            Text("REMINDERS", color = Holo.Muted, fontSize = 11.sp, letterSpacing = 2.5.sp, modifier = Modifier.weight(1f))
             val doneCount = tasks.count { it.done }
-            if (doneCount > 0) Text("Effacer les terminés ($doneCount)", color = Holo.Violet, fontSize = 12.sp,
+            if (doneCount > 0) Text("Clear completed ($doneCount)", color = Holo.Violet, fontSize = 12.sp,
                 modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { save(tasks.filterNot { it.done }) }.padding(4.dp))
         }
         (tasks.filterNot { it.done } + tasks.filter { it.done }).forEach { t ->
@@ -97,14 +97,14 @@ fun TasksCard() {
                 Box(Modifier.size(26.dp).clip(CircleShape)
                     .then(if (t.done) Modifier.background(Brush.linearGradient(Holo.Iridescent), CircleShape) else Modifier.border(1.5.dp, Holo.Muted, CircleShape))
                     .clickable { save(tasks.map { if (it.id == t.id) it.copy(done = !it.done) else it }) }
-                    .semantics { contentDescription = if (t.done) "Marquer comme à faire" else "Marquer comme fait" },
+                    .semantics { contentDescription = if (t.done) "Mark as to do" else "Mark as done" },
                     contentAlignment = Alignment.Center) {
                     if (t.done) Icon(Icons.Rounded.Check, null, tint = Color(0xFF120A22), modifier = Modifier.size(16.dp))
                 }
                 Text(t.text, color = if (t.done) Holo.Muted else Holo.Ink, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
                     textDecoration = if (t.done) TextDecoration.LineThrough else null, modifier = Modifier.weight(1f).padding(horizontal = 12.dp))
                 Box(Modifier.size(32.dp).clip(CircleShape).clickable { save(tasks.filterNot { it.id == t.id }) }
-                    .semantics { contentDescription = "Supprimer" }, contentAlignment = Alignment.Center) {
+                    .semantics { contentDescription = "Delete" }, contentAlignment = Alignment.Center) {
                     Icon(Icons.Rounded.Close, null, tint = Holo.Muted, modifier = Modifier.size(16.dp))
                 }
             }
@@ -112,20 +112,20 @@ fun TasksCard() {
         Row(Modifier.fillMaxWidth().height(46.dp).glass(RoundedCornerShape(50), .06f).padding(start = 16.dp, end = 6.dp),
             verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) {
-                if (draft.isEmpty()) Text("Ajouter un rappel…", color = Holo.Muted, fontSize = 14.sp)
+                if (draft.isEmpty()) Text("Add a reminder…", color = Holo.Muted, fontSize = 14.sp)
                 BasicTextField(draft, { draft = it }, Modifier.fillMaxWidth(), singleLine = true,
                     textStyle = TextStyle(color = Holo.Ink, fontSize = 14.sp), cursorBrush = SolidColor(Holo.Violet),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { add() }))
             }
             Box(Modifier.size(36.dp).clip(CircleShape).background(Brush.linearGradient(Holo.Iridescent), CircleShape).clickable { add() }
-                .semantics { contentDescription = "Ajouter" }, contentAlignment = Alignment.Center) {
+                .semantics { contentDescription = "Add" }, contentAlignment = Alignment.Center) {
                 Icon(Icons.Rounded.Add, null, tint = Color(0xFF120A22), modifier = Modifier.size(20.dp))
             }
         }
     }
 }
 
-// ---------- Temps d'écran ----------
+// ---------- Screen time ----------
 
 fun hasUsageAccess(context: Context): Boolean = runCatching {
     val ops = context.getSystemService(AppOpsManager::class.java)
@@ -145,27 +145,27 @@ private suspend fun todayUsage(context: Context): List<Pair<String, Long>> = wit
 
 private fun duration(ms: Long): String {
     val minutes = ms / 60_000
-    return if (minutes >= 60) "${minutes / 60} h ${"%02d".format(minutes % 60)}" else "$minutes min"
+    return if (minutes >= 60) "${minutes / 60}h ${"%02d".format(minutes % 60)}m" else "${minutes}m"
 }
 
-/** "Temps d'écran": today's total and the three apps used the most. */
+/** "Screen time": today's total and the three apps used the most. */
 @Composable
 fun ScreenTimeCard(launcher: Launcher, refresh: Int) {
     val context = LocalContext.current
     val allowed = hasUsageAccess(context)
     val usage by produceState(emptyList<Pair<String, Long>>(), allowed, refresh) { if (allowed) value = todayUsage(context) }
     Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(28.dp), .05f).padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("TEMPS D’ÉCRAN", color = Holo.Muted, fontSize = 11.sp, letterSpacing = 2.5.sp)
+        Text("SCREEN TIME", color = Holo.Muted, fontSize = 11.sp, letterSpacing = 2.5.sp)
         if (!allowed) {
-            Text("Autorise l’accès à l’utilisation pour voir ton temps d’écran du jour.", color = Holo.Soft, fontSize = 14.sp)
-            PillButton("Autoriser", true) {
+            Text("Allow usage access to see today’s screen time.", color = Holo.Soft, fontSize = 14.sp)
+            PillButton("Allow", true) {
                 runCatching { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             }
             return@Column
         }
         val total = usage.sumOf { it.second }
         IridescentText(duration(total), 40.sp, letterSpacing = 0.sp)
-        Text("aujourd’hui", color = Holo.Muted, fontSize = 12.sp)
+        Text("today", color = Holo.Muted, fontSize = 12.sp)
         val top = usage.take(3)
         val max = top.maxOfOrNull { it.second } ?: 1L
         top.forEach { (pkg, ms) ->
@@ -182,6 +182,6 @@ fun ScreenTimeCard(launcher: Launcher, refresh: Int) {
                 Text(duration(ms), color = Holo.Soft, fontSize = 12.sp)
             }
         }
-        if (top.isEmpty()) Text("Pas encore d’utilisation aujourd’hui.", color = Holo.Soft, fontSize = 13.sp)
+        if (top.isEmpty()) Text("No usage yet today.", color = Holo.Soft, fontSize = 13.sp)
     }
 }
