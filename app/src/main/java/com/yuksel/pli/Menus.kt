@@ -154,25 +154,25 @@ fun AppMenu(request: MenuRequest, launcher: Launcher, currentScreen: Screen, onD
                         Text(folder.title, color = Holo.Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 12.dp))
                     }
                     Divider()
-                    MenuRow(Icons.Rounded.DriveFileRenameOutline, "Renommer") { onRenameFolder(folder.id); onDismiss() }
+                    MenuRow(Icons.Rounded.DriveFileRenameOutline, "Rename") { onRenameFolder(folder.id); onDismiss() }
                     if (!locked) {
-                        Text("Taille sur l’accueil", color = Holo.Muted, fontSize = 12.sp, modifier = Modifier.padding(start = 14.dp, top = 6.dp))
+                        Text("Size on home screen", color = Holo.Muted, fontSize = 12.sp, modifier = Modifier.padding(start = 14.dp, top = 6.dp))
                         Row(Modifier.padding(horizontal = 8.dp, vertical = 8.dp).horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             FOLDER_SIZES.forEach { (w, h, label) ->
                                 PillButton(label, highlighted = folder.w == w && folder.h == h) {
-                                    launcher.edit("Taille du dossier") { LayoutEdits.setFolderSize(it, folder.id, w, h) }
+                                    launcher.edit("Folder size") { LayoutEdits.setFolderSize(it, folder.id, w, h) }
                                 }
                             }
                         }
                     }
-                    if (!locked) MenuRow(Icons.Rounded.CallSplit, "Défaire le dossier") {
-                        launcher.edit("Dossier défait") { l -> LayoutEdits.ungroup(l, (request.origin as? Origin.Home)?.screen ?: currentScreen, folder.id) }
+                    if (!locked) MenuRow(Icons.Rounded.CallSplit, "Ungroup folder") {
+                        launcher.edit("Folder ungrouped") { l -> LayoutEdits.ungroup(l, (request.origin as? Origin.Home)?.screen ?: currentScreen, folder.id) }
                         onDismiss()
                     }
-                    if (!locked) MenuRow(Icons.Rounded.RemoveCircleOutline, "Retirer de l’accueil", Holo.Pink) {
+                    if (!locked) MenuRow(Icons.Rounded.RemoveCircleOutline, "Remove from home", Holo.Pink) {
                         val screen = (request.origin as? Origin.Home)?.screen ?: currentScreen
-                        launcher.edit("Dossier retiré") { l -> l.withHome(screen, LayoutEdits.blank(l.home(screen), setOf(folder.id))).copy(folders = l.folders - folder.id) }
+                        launcher.edit("Folder removed") { l -> l.withHome(screen, LayoutEdits.blank(l.home(screen), setOf(folder.id))).copy(folders = l.folders - folder.id) }
                         onDismiss()
                     }
                     return@MenuCard
@@ -182,7 +182,7 @@ fun AppMenu(request: MenuRequest, launcher: Launcher, currentScreen: Screen, onD
                     AppIcon(app, 40.dp, showBadge = false)
                     Column(Modifier.padding(start = 12.dp)) {
                         Text(app.label, color = Holo.Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        if (app.work) Text("Profil professionnel", color = Holo.Muted, fontSize = 12.sp)
+                        if (app.work) Text("Work profile", color = Holo.Muted, fontSize = 12.sp)
                     }
                 }
                 val previews = BadgeService.previews.collectAsState().value[app.packageName].orEmpty()
@@ -219,42 +219,42 @@ fun AppMenu(request: MenuRequest, launcher: Launcher, currentScreen: Screen, onD
                             // The arrow marks the shortcut opened by swiping up on the icon; tap it to choose another.
                             Box(Modifier.size(40.dp).clip(CircleShape).clickable {
                                 launcher.update { l -> l.copy(swipeShortcuts = l.swipeShortcuts + (app.id to s.info.id)) }
-                            }.semantics { contentDescription = "Ouvrir avec le glisser vers le haut" }, contentAlignment = Alignment.Center) {
+                            }.semantics { contentDescription = "Open with swipe up" }, contentAlignment = Alignment.Center) {
                                 Icon(Icons.Rounded.SwipeUp, null, tint = if (isFavourite) Holo.Violet else Holo.Muted.copy(alpha = .4f), modifier = Modifier.size(18.dp))
                             }
                         }
                     }
-                    Text("Glisse vers le haut sur l’icône pour ouvrir le raccourci marqué ↑", color = Holo.Muted, fontSize = 11.sp,
+                    Text("Swipe up on the icon to open the shortcut marked ↑", color = Holo.Muted, fontSize = 11.sp,
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp))
                 }
                 Divider()
                 val layout = launcher.layout
                 val screen = when (val o = request.origin) { is Origin.Home -> o.screen; is Origin.InFolder -> o.screen; else -> currentScreen }
                 if (!locked) when (val o = request.origin) {
-                    is Origin.InFolder -> MenuRow(Icons.Rounded.Logout, "Sortir du dossier") {
-                        launcher.edit("Sorti du dossier") { LayoutEdits.moveOutOfFolder(it, o.screen, o.folderId, app.id) }; onDismiss()
+                    is Origin.InFolder -> MenuRow(Icons.Rounded.Logout, "Remove from folder") {
+                        launcher.edit("Removed from folder") { LayoutEdits.moveOutOfFolder(it, o.screen, o.folderId, app.id) }; onDismiss()
                     }
-                    is Origin.Home -> MenuRow(Icons.Rounded.RemoveCircleOutline, "Retirer de l’accueil") {
-                        launcher.edit("Retiré de l’accueil") { LayoutEdits.removeFromHome(it, o.screen, app.id) }; onDismiss()
+                    is Origin.Home -> MenuRow(Icons.Rounded.RemoveCircleOutline, "Remove from home") {
+                        launcher.edit("Removed from home") { LayoutEdits.removeFromHome(it, o.screen, app.id) }; onDismiss()
                     }
-                    else -> if (app.id !in layout.placedApps(screen)) MenuRow(Icons.Rounded.AddToHomeScreen, "Ajouter à l’accueil") {
+                    else -> if (app.id !in layout.placedApps(screen)) MenuRow(Icons.Rounded.AddToHomeScreen, "Add to home") {
                         launcher.update { LayoutEdits.addToHome(it, screen, app.id) }; onDismiss()
                     }
                 }
                 if (request.origin !is Origin.InFolder && !locked) {
-                    if (app.id in layout.dockOf(screen)) MenuRow(Icons.Rounded.Dock, "Retirer du dock") {
-                        launcher.edit("Retiré du dock") { LayoutEdits.removeFromDock(it, app.id, screen) }; onDismiss()
-                    } else if (layout.dockOf(screen).size < launcher.dockSizes.max(screen)) MenuRow(Icons.Rounded.Dock, "Mettre dans le dock") {
+                    if (app.id in layout.dockOf(screen)) MenuRow(Icons.Rounded.Dock, "Remove from dock") {
+                        launcher.edit("Removed from dock") { LayoutEdits.removeFromDock(it, app.id, screen) }; onDismiss()
+                    } else if (layout.dockOf(screen).size < launcher.dockSizes.max(screen)) MenuRow(Icons.Rounded.Dock, "Add to dock") {
                         launcher.update { LayoutEdits.addToDock(it, app.id, screen, launcher.dockSizes) }; onDismiss()
                     }
                 }
                 if (!locked && (request.origin is Origin.Home || request.origin == Origin.Dock))
-                    MenuRow(Icons.Rounded.Checklist, "Sélectionner plusieurs") { onSelect(app.id); onDismiss() }
-                MenuRow(Icons.Rounded.DriveFileRenameOutline, "Renommer") { onRename(app); onDismiss() }
-                MenuRow(Icons.Rounded.Palette, "Changer l’icône") { onChangeIcon(app); onDismiss() }
+                    MenuRow(Icons.Rounded.Checklist, "Select multiple") { onSelect(app.id); onDismiss() }
+                MenuRow(Icons.Rounded.DriveFileRenameOutline, "Rename") { onRename(app); onDismiss() }
+                MenuRow(Icons.Rounded.Palette, "Change icon") { onChangeIcon(app); onDismiss() }
                 val isProtected = app.id in launcher.layout.protectedApps
                 MenuRow(if (isProtected) Icons.Rounded.LockOpen else Icons.Rounded.Fingerprint,
-                    if (isProtected) "Ne plus protéger" else "Protéger par empreinte") {
+                    if (isProtected) "Stop protecting" else "Protect with fingerprint") {
                     launcher.update { l -> l.copy(protectedApps = if (isProtected) l.protectedApps - app.id else l.protectedApps + app.id) }
                     onDismiss()
                 }
@@ -262,15 +262,15 @@ fun AppMenu(request: MenuRequest, launcher: Launcher, currentScreen: Screen, onD
                 Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(16.dp)).clickable { onInfo(app); onDismiss() }
                     .padding(horizontal = 14.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Stockage et cache", color = Holo.Ink, fontSize = 15.sp)
-                        Text(storage ?: if (hasUsageAccess(context)) "Calcul…" else "Taille visible avec l’accès à l’utilisation",
+                        Text("Storage and cache", color = Holo.Ink, fontSize = 15.sp)
+                        Text(storage ?: if (hasUsageAccess(context)) "Calculating…" else "Size shown with usage access",
                             color = Holo.Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Icon(Icons.Rounded.Storage, null, tint = Holo.Ink.copy(alpha = .85f), modifier = Modifier.size(20.dp))
                 }
-                MenuRow(Icons.Rounded.Info, "Infos sur l’appli") { onInfo(app); onDismiss() }
-                if (!locked) MenuRow(Icons.Rounded.VisibilityOff, "Masquer l’appli") { launcher.hide(app); onDismiss() }
-                MenuRow(Icons.Rounded.Delete, "Désinstaller", Holo.Pink) { onUninstall(app); onDismiss() }
+                MenuRow(Icons.Rounded.Info, "App info") { onInfo(app); onDismiss() }
+                if (!locked) MenuRow(Icons.Rounded.VisibilityOff, "Hide app") { launcher.hide(app); onDismiss() }
+                MenuRow(Icons.Rounded.Delete, "Uninstall", Holo.Pink) { onUninstall(app); onDismiss() }
             }
         }
     }
@@ -287,19 +287,19 @@ fun HomeMenu(onDismiss: () -> Unit, onWidgets: (() -> Unit)?, onSettings: () -> 
             MenuCard {
                 Text("Fold Launcher Pro", color = Holo.Muted, fontSize = 12.sp, letterSpacing = 2.sp, modifier = Modifier.padding(10.dp))
                 if (!locked) {
-                    MenuRow(Icons.Rounded.AddToHomeScreen, "Ajouter des applis") { onDismiss(); onAddApps() }
-                    MenuRow(Icons.Rounded.Checklist, "Sélectionner des applis") { onDismiss(); onSelect() }
-                    MenuRow(Icons.Rounded.AddBox, "Ajouter une page") { onDismiss(); onAddPage() }
-                    if (onDeletePage != null) MenuRow(Icons.Rounded.DeleteSweep, "Supprimer cette page", Holo.Pink) { onDismiss(); onDeletePage() }
-                    if (copyFrom != null) MenuRow(Icons.Rounded.ContentCopy, "Copier la disposition de $copyFrom") { onDismiss(); onCopy() }
+                    MenuRow(Icons.Rounded.AddToHomeScreen, "Add apps") { onDismiss(); onAddApps() }
+                    MenuRow(Icons.Rounded.Checklist, "Select apps") { onDismiss(); onSelect() }
+                    MenuRow(Icons.Rounded.AddBox, "Add page") { onDismiss(); onAddPage() }
+                    if (onDeletePage != null) MenuRow(Icons.Rounded.DeleteSweep, "Delete this page", Holo.Pink) { onDismiss(); onDeletePage() }
+                    if (copyFrom != null) MenuRow(Icons.Rounded.ContentCopy, "Copy layout from $copyFrom") { onDismiss(); onCopy() }
                 }
-                MenuRow(if (locked) Icons.Rounded.LockOpen else Icons.Rounded.Lock, if (locked) "Déverrouiller la disposition" else "Verrouiller la disposition") {
+                MenuRow(if (locked) Icons.Rounded.LockOpen else Icons.Rounded.Lock, if (locked) "Unlock layout" else "Lock layout") {
                     onDismiss(); onLock(!locked)
                 }
-                if (onWidgets != null) MenuRow(Icons.Rounded.Widgets, "Ajouter un widget") { onDismiss(); onWidgets() }
-                if (onToday != null) MenuRow(Icons.Rounded.ViewDay, "Modifier « Aujourd’hui »") { onDismiss(); onToday() }
-                MenuRow(Icons.Rounded.Apps, "Toutes les applis") { onDismiss(); onApps() }
-                MenuRow(Icons.Rounded.Tune, "Réglages de Fold Launcher Pro") { onDismiss(); onSettings() }
+                if (onWidgets != null) MenuRow(Icons.Rounded.Widgets, "Add a widget") { onDismiss(); onWidgets() }
+                if (onToday != null) MenuRow(Icons.Rounded.ViewDay, "Edit “Today”") { onDismiss(); onToday() }
+                MenuRow(Icons.Rounded.Apps, "All apps") { onDismiss(); onApps() }
+                MenuRow(Icons.Rounded.Tune, "Fold Launcher Pro settings") { onDismiss(); onSettings() }
             }
         }
     }
@@ -344,7 +344,7 @@ fun FolderPanel(folderId: String, screen: Screen, launcher: Launcher, startRenam
                     repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
-            Text("Maintiens une appli pour la sortir du dossier.", color = Holo.Muted, fontSize = 12.sp,
+            Text("Long-press an app to take it out of the folder.", color = Holo.Muted, fontSize = 12.sp,
                 modifier = Modifier.padding(top = 4.dp))
         }
     }
@@ -356,14 +356,14 @@ fun Modifier.combinedClick(onClick: () -> Unit, onLongClick: () -> Unit): Modifi
     combinedClickable(onClick = onClick, onLongClick = onLongClick)
 
 /** Folder sizes on the home page: columns × rows (0 columns = the whole width). */
-private val FOLDER_SIZES = listOf(Triple(1, 1, "Icône"), Triple(2, 1, "2×1"), Triple(2, 2, "2×2"), Triple(3, 2, "3×2"),
-    Triple(0, 1, "Largeur ×1"), Triple(0, 2, "Largeur ×2"), Triple(0, 3, "Largeur ×3"), Triple(0, 4, "Largeur ×4"))
+private val FOLDER_SIZES = listOf(Triple(1, 1, "Icon"), Triple(2, 1, "2×1"), Triple(2, 2, "2×2"), Triple(3, 2, "3×2"),
+    Triple(0, 1, "Full width ×1"), Triple(0, 2, "Full width ×2"), Triple(0, 3, "Full width ×3"), Triple(0, 4, "Full width ×4"))
 
-/** "Appli 120 Mo · données 40 Mo · cache 12 Mo" (needs usage access). Clearing the cache is done in the system page. */
+/** "App 120 MB · data 40 MB · cache 12 MB" (needs usage access). Clearing the cache is done in the system page. */
 fun appStorage(context: android.content.Context, app: AppInfo): String? = runCatching {
     if (!hasUsageAccess(context)) return null
     val manager = context.getSystemService(android.app.usage.StorageStatsManager::class.java)
     val stats = manager.queryStatsForPackage(android.os.storage.StorageManager.UUID_DEFAULT, app.packageName, app.user)
-    fun mb(bytes: Long) = if (bytes >= 1_000_000_000) "%.1f Go".format(java.util.Locale.FRANCE, bytes / 1e9) else "${bytes / 1_000_000} Mo"
-    "Appli ${mb(stats.appBytes)} · données ${mb(stats.dataBytes - stats.cacheBytes)} · cache ${mb(stats.cacheBytes)}"
+    fun mb(bytes: Long) = if (bytes >= 1_000_000_000) "%.1f GB".format(java.util.Locale.US, bytes / 1e9) else "${bytes / 1_000_000} MB"
+    "App ${mb(stats.appBytes)} · data ${mb(stats.dataBytes - stats.cacheBytes)} · cache ${mb(stats.cacheBytes)}"
 }.getOrNull()
