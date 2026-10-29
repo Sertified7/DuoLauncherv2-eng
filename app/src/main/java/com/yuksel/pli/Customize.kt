@@ -47,8 +47,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.Locale
 
-/** Gives an app another name on Pli (its real name stays unchanged). */
+/** Gives an app a custom name in the launcher (its actual system name stays unchanged). */
 @Composable
 fun RenameDialog(app: AppInfo, launcher: Launcher, onDone: () -> Unit) {
     val original = launcher.originalLabel(app.id)
@@ -68,26 +69,26 @@ fun RenameDialog(app: AppInfo, launcher: Launcher, onDone: () -> Unit) {
             .clickable(remember { MutableInteractionSource() }, null) {}.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AppIcon(app, 44.dp, showBadge = false)
-                IridescentText("Renommer", 24.sp, Modifier.padding(start = 12.dp), letterSpacing = 0.sp)
+                IridescentText("Rename", 24.sp, Modifier.padding(start = 12.dp), letterSpacing = 0.sp)
             }
             Box(Modifier.fillMaxWidth().glass(RoundedCornerShape(18.dp), .07f).padding(horizontal = 16.dp, vertical = 14.dp)) {
                 BasicTextField(text, { text = it }, Modifier.fillMaxWidth().focusRequester(focus), singleLine = true,
                     textStyle = TextStyle(color = Holo.Ink, fontSize = 17.sp), cursorBrush = SolidColor(Holo.Violet))
             }
-            Text(if (renamed && original != null) "Nom d’origine : $original" else "Ce nom ne s’affiche que dans Fold Launcher Pro.", color = Holo.Muted, fontSize = 12.sp)
+            Text(if (renamed && original != null) "Original name: $original" else "This name is only shown in Fold Launcher Pro.", color = Holo.Muted, fontSize = 12.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (app.id in launcher.layout.labels) PillButton("Nom d’origine") {
+                if (app.id in launcher.layout.labels) PillButton("Original name") {
                     launcher.update { l -> l.copy(labels = l.labels - app.id) }; onDone()
                 }
                 Spacer(Modifier.weight(1f))
-                PillButton("Annuler", onClick = onDone)
+                PillButton("Cancel", onClick = onDone)
                 PillButton("OK", highlighted = true, onClick = ::save)
             }
         }
     }
 }
 
-/** Chooses one app's icon: from an installed icon pack, from a picture, or back to the original. */
+/** Selects an app's icon: from an installed icon pack, a custom image, or resets to the original. */
 @Composable
 fun IconPicker(app: AppInfo, launcher: Launcher, host: PliHost, modifier: Modifier, onDone: () -> Unit) {
     val context = LocalContext.current
@@ -98,11 +99,11 @@ fun IconPicker(app: AppInfo, launcher: Launcher, host: PliHost, modifier: Modifi
         value = null
         value = pack?.let { p -> withContext(Dispatchers.IO) { CustomIcons.packIcons(context, p) } } ?: emptyList()
     }
-    // Icons whose name looks like the app's come first.
+    // Prioritize icons whose name matches the app label.
     val key = app.label.normalizedForSearch().replace(" ", "")
     val shown = remember(names, filter) {
         val all = names ?: emptyList()
-        val q = filter.trim().lowercase().replace(" ", "_")
+        val q = filter.trim().lowercase(Locale.US).replace(" ", "_")
         (if (q.isEmpty()) all else all.filter { it.contains(q) }).sortedBy { if (key.isNotEmpty() && it.replace("_", "").contains(key)) 0 else 1 }
     }
     fun set(spec: String?) {
@@ -112,19 +113,19 @@ fun IconPicker(app: AppInfo, launcher: Launcher, host: PliHost, modifier: Modifi
     Column(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             AppIcon(app, 44.dp, showBadge = false)
-            IridescentText("Icône de ${app.label}", 22.sp, Modifier.weight(1f).padding(start = 12.dp), letterSpacing = 0.sp)
-            PillButton("Fermer", onClick = onDone)
+            IridescentText("${app.label} icon", 22.sp, Modifier.weight(1f).padding(start = 12.dp), letterSpacing = 0.sp)
+            PillButton("Close", onClick = onDone)
         }
         Row(Modifier.padding(vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PillButton("Choisir une image", highlighted = true) {
+            PillButton("Choose an image", highlighted = true) {
                 host.pickImage { uri ->
                     CustomIcons.saveImage(context, uri, app.id)?.let { set(it) }
                 }
             }
-            if (app.id in launcher.layout.icons) PillButton("Icône d’origine") { set(null) }
+            if (app.id in launcher.layout.icons) PillButton("Original icon") { set(null) }
         }
         if (packs.isEmpty()) {
-            Text("Installe un pack d’icônes depuis le Play Store pour choisir parmi ses icônes, ou prends une image.",
+            Text("Install an icon pack from the Play Store to browse its icons, or choose an image.",
                 color = Holo.Muted, fontSize = 13.sp)
             return@Column
         }
@@ -132,7 +133,7 @@ fun IconPicker(app: AppInfo, launcher: Launcher, host: PliHost, modifier: Modifi
             packs.forEach { p -> PillButton(p.label, highlighted = p.packageName == pack) { pack = p.packageName } }
         }
         Spacer(Modifier.height(10.dp))
-        GlassField(filter, { filter = it }, "Chercher une icône (ex. camera)", null, Modifier.fillMaxWidth())
+        GlassField(filter, { filter = it }, "Search icons (e.g., camera)", null, Modifier.fillMaxWidth())
         Spacer(Modifier.height(10.dp))
         val list = names
         if (list == null) Box(Modifier.fillMaxWidth().padding(30.dp), contentAlignment = Alignment.Center) {
