@@ -19,6 +19,9 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlin.math.roundToInt
 
+/** Temperature unit for the weather: "fahrenheit" or "celsius". */
+private const val TEMPERATURE_UNIT = "fahrenheit"
+
 enum class Sky { CLEAR, PARTLY, CLOUDY, FOG, DRIZZLE, RAIN, SNOW, STORM }
 
 data class HourForecast(val hour: Int, val temperature: Int, val sky: Sky)
@@ -28,15 +31,15 @@ data class AgendaEvent(val title: String, val start: LocalDateTime, val end: Loc
 data class BatteryInfo(val level: Int, val charging: Boolean)
 
 private fun skyOf(code: Int): Pair<String, Sky> = when (code) {
-    0 -> "Ensoleillé" to Sky.CLEAR
-    1, 2 -> "Éclaircies" to Sky.PARTLY
-    3 -> "Nuageux" to Sky.CLOUDY
-    45, 48 -> "Brouillard" to Sky.FOG
-    in 51..57 -> "Bruine" to Sky.DRIZZLE
-    in 61..67, in 80..82 -> "Pluie" to Sky.RAIN
-    in 71..77, 85, 86 -> "Neige" to Sky.SNOW
-    in 95..99 -> "Orage" to Sky.STORM
-    else -> "Météo" to Sky.CLOUDY
+    0 -> "Sunny" to Sky.CLEAR
+    1, 2 -> "Partly cloudy" to Sky.PARTLY
+    3 -> "Cloudy" to Sky.CLOUDY
+    45, 48 -> "Fog" to Sky.FOG
+    in 51..57 -> "Drizzle" to Sky.DRIZZLE
+    in 61..67, in 80..82 -> "Rain" to Sky.RAIN
+    in 71..77, 85, 86 -> "Snow" to Sky.SNOW
+    in 95..99 -> "Thunderstorm" to Sky.STORM
+    else -> "Weather" to Sky.CLOUDY
 }
 
 private fun lastKnownPosition(context: Context): Pair<Double, Double>? {
@@ -55,7 +58,7 @@ private fun httpJson(url: String): JSONObject {
 /** Finds a city with Open-Meteo's geocoder: (name, latitude, longitude). */
 suspend fun findCity(name: String): Triple<String, Double, Double>? = withContext(Dispatchers.IO) {
     runCatching {
-        val json = httpJson("https://geocoding-api.open-meteo.com/v1/search?count=1&language=fr&name=" + URLEncoder.encode(name.trim(), "UTF-8"))
+        val json = httpJson("https://geocoding-api.open-meteo.com/v1/search?count=1&language=en&name=" + URLEncoder.encode(name.trim(), "UTF-8"))
         val first = json.optJSONArray("results")?.optJSONObject(0) ?: return@runCatching null
         Triple(first.optString("name", name), first.getDouble("latitude"), first.getDouble("longitude"))
     }.getOrNull()
@@ -68,7 +71,8 @@ suspend fun loadWeather(context: Context, settings: PliSettings): Weather? = wit
     runCatching {
         val json = httpJson("https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon" +
             "&current=temperature_2m,weather_code&hourly=temperature_2m,weather_code" +
-            "&daily=temperature_2m_max,temperature_2m_min&forecast_days=2&timezone=auto")
+            "&daily=temperature_2m_max,temperature_2m_min&forecast_days=2&timezone=auto" +
+            "&temperature_unit=$TEMPERATURE_UNIT")
         val current = json.getJSONObject("current")
         val daily = json.optJSONObject("daily")
         val (label, sky) = skyOf(current.getInt("weather_code"))
@@ -85,7 +89,7 @@ suspend fun loadWeather(context: Context, settings: PliSettings): Weather? = wit
                 }
             }
         }
-        Weather(settings.city.ifBlank { "Ici" }, current.getDouble("temperature_2m").roundToInt(), label, sky,
+        Weather(settings.city.ifBlank { "Here" }, current.getDouble("temperature_2m").roundToInt(), label, sky,
             daily?.optJSONArray("temperature_2m_max")?.optDouble(0)?.takeUnless(Double::isNaN)?.roundToInt(),
             daily?.optJSONArray("temperature_2m_min")?.optDouble(0)?.takeUnless(Double::isNaN)?.roundToInt(), hours)
     }.getOrNull()
@@ -109,7 +113,7 @@ suspend fun loadEvents(context: Context, max: Int = 4): List<AgendaEvent> = with
                 val begin = cursor.getLong(1); val end = cursor.getLong(2); val allDay = cursor.getInt(3) == 1
                 if (end <= now) continue
                 val zone = if (allDay) ZoneId.of("UTC") else ZoneId.systemDefault()
-                result += AgendaEvent(cursor.getString(0)?.takeIf { it.isNotBlank() } ?: "Sans titre",
+                result += AgendaEvent(cursor.getString(0)?.takeIf { it.isNotBlank() } ?: "Untitled",
                     LocalDateTime.ofInstant(Instant.ofEpochMilli(begin), zone),
                     LocalDateTime.ofInstant(Instant.ofEpochMilli(end), zone), allDay, cursor.getInt(4))
             }
