@@ -28,7 +28,7 @@ class MainActivity : ComponentActivity(), PliHost {
             val ok = runCatching {
                 contentResolver.openOutputStream(uri)?.use { it.write(launcher.store.export().toString(2).toByteArray()) } != null
             }.getOrDefault(false)
-            toast(if (ok) "Disposition exportée" else "Export impossible")
+            toast(if (ok) "Layout exported" else "Export failed")
         }
     }
     private val importFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -36,7 +36,7 @@ class MainActivity : ComponentActivity(), PliHost {
             val json = runCatching { contentResolver.openInputStream(uri)?.use { org.json.JSONObject(it.bufferedReader().readText()) } }.getOrNull()
             val ok = json != null && launcher.store.import(json, launcher.layout.today.filter { it.isAndroid })
             if (ok) launcher.reloadAll()
-            toast(if (ok) "Disposition importée" else "Ce fichier n’est pas une sauvegarde Fold Launcher Pro")
+            toast(if (ok) "Layout imported" else "This file is not a Fold Launcher Pro backup")
         }
     }
     private var imageCallback: ((android.net.Uri) -> Unit)? = null
@@ -160,12 +160,12 @@ class MainActivity : ComponentActivity(), PliHost {
     private fun toast(text: String) = android.widget.Toast.makeText(this, text, android.widget.Toast.LENGTH_SHORT).show()
 
     override fun openAccessibilitySettings() {
-        toast("Active « Fold Launcher Pro – verrouillage par geste »")
+        toast("Enable \"Fold Launcher Pro – gesture lock\"")
         runCatching { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
     }
 
     override fun exportBackup() {
-        exportFile.launch("fold-launcher-pro-disposition-" + java.time.LocalDate.now() + ".json")
+        exportFile.launch("fold-launcher-pro-layout-" + java.time.LocalDate.now() + ".json")
     }
 
     override fun importBackup() {
@@ -181,7 +181,7 @@ class MainActivity : ComponentActivity(), PliHost {
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT or Intent.FLAG_ACTIVITY_MULTIPLE_TASK))
                 } else launch(second, null)
             }.isSuccess
-            if (!ok) toast("${second.label} ne peut pas s’ouvrir en écran partagé")
+            if (!ok) toast("${second.label} cannot open in split screen")
         }, if (first != null) 450L else 0L)
     }
 
@@ -193,7 +193,7 @@ class MainActivity : ComponentActivity(), PliHost {
     override fun authenticate(title: String, onSuccess: () -> Unit) {
         val prompt = android.hardware.biometrics.BiometricPrompt.Builder(this)
             .setTitle(title)
-            .setSubtitle("Appli protégée dans Fold Launcher Pro")
+            .setSubtitle("Protected app in Fold Launcher Pro")
             .setAllowedAuthenticators(android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_WEAK or
                 android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDENTIAL)
             .build()
@@ -201,7 +201,7 @@ class MainActivity : ComponentActivity(), PliHost {
             prompt.authenticate(android.os.CancellationSignal(), mainExecutor, object : android.hardware.biometrics.BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: android.hardware.biometrics.BiometricPrompt.AuthenticationResult?) = onSuccess()
             })
-        }.onFailure { toast("Aucun verrouillage d’écran configuré") }
+        }.onFailure { toast("No screen lock configured") }
     }
 
     override fun expandNotifications() {
