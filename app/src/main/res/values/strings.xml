@@ -1,5 +1,5 @@
 <resources>
     <string name="app_name">Fold Launcher Pro</string>
-    <string name="accessibility_label">Fold Launcher Pro – verrouillage par geste</string>
-    <string name="accessibility_description">Permet à Fold Launcher Pro de verrouiller l’écran quand tu fais le geste choisi (par exemple un double appui sur l’accueil). Fold Launcher Pro ne lit pas le contenu de l’écran.</string>
+    <string name="accessibility_label">Fold Launcher Pro – gesture lock</string>
+    <string name="accessibility_description">Allows Fold Launcher Pro to lock the screen when you perform the selected gesture (such as double-tapping the home screen). Fold Launcher Pro does not read screen content.</string>
 </resources>
