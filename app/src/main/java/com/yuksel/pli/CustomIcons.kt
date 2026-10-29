@@ -11,7 +11,7 @@ import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 import java.io.File
 
-/** Icons chosen by hand for one app: from an icon pack, or from a picture. */
+/** Manually selected custom icons for an app: from an icon pack or an image file. */
 object CustomIcons {
     private fun dir(context: Context) = File(context.filesDir, "icons").apply { mkdirs() }
 
@@ -29,7 +29,7 @@ object CustomIcons {
         }
     }.getOrNull()
 
-    /** Copies a picture into Pli as a square icon. Returns its spec. */
+    /** Copies an image into the app's storage as a square icon. Returns its spec. */
     fun saveImage(context: Context, uri: Uri, appId: String): String? = runCatching {
         val source = context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) } ?: return null
         val side = minOf(source.width, source.height)
@@ -40,7 +40,7 @@ object CustomIcons {
         "file:$name"
     }.getOrNull()
 
-    /** Every drawable an icon pack offers (names from its drawable.xml, else its appfilter.xml). */
+    /** All drawables provided by an icon pack (parsed from drawable.xml, or fallback to appfilter.xml). */
     fun packIcons(context: Context, pkg: String): List<String> = runCatching {
         val res = context.packageManager.getResourcesForApplication(pkg)
         fun parser(name: String): XmlPullParser? = res.getIdentifier(name, "xml", pkg).takeIf { it != 0 }?.let { res.getXml(it) }
