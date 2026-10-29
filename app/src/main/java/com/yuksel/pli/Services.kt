@@ -78,7 +78,7 @@ data class NotificationPreview(val key: String, val title: String, val text: Str
 data class NowPlaying(val title: String, val artist: String, val art: ImageBitmap?, val playing: Boolean,
     val packageName: String, val duration: Long, val position: Long)
 
-/** Follows the active media session (needs notification access) for the "Lecture en cours" card. */
+/** Follows the active media session (needs notification access) for the "Now playing" card. */
 object MediaWatcher {
     private val state = MutableStateFlow<NowPlaying?>(null)
     val nowPlaying: StateFlow<NowPlaying?> = state.asStateFlow()
@@ -135,7 +135,7 @@ object MediaWatcher {
 
 data class AppShortcut(val info: ShortcutInfo, val label: String, val icon: ImageBitmap?)
 
-/** Static, dynamic and pinned shortcuts an app offers. Only available while Pli is the default home app. */
+/** Static, dynamic, and pinned shortcuts an app offers. Only available while Pli is the default home app. */
 fun loadAppShortcuts(context: Context, app: AppInfo): List<AppShortcut> = runCatching {
     val launcherApps = context.getSystemService(LauncherApps::class.java)
     if (!launcherApps.hasShortcutHostPermission()) return emptyList()
