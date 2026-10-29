@@ -60,7 +60,8 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val FR = Locale.FRANCE
+// Dates follow the phone's language (was fixed to French).
+private val LOCALE: Locale = Locale.getDefault()
 
 @Composable
 fun rememberNow(): LocalDateTime {
@@ -83,7 +84,7 @@ fun skyIcon(sky: Sky): ImageVector = when (sky) {
     Sky.STORM -> Icons.Rounded.Thunderstorm
 }
 
-fun capitalize(text: String) = text.replaceFirstChar { it.titlecase(FR) }
+fun capitalize(text: String) = text.replaceFirstChar { it.titlecase(LOCALE) }
 
 /** Date, huge iridescent time and the glance chips (weather, next event, battery). */
 @Composable
@@ -96,12 +97,12 @@ fun ClockHeader(today: TodayState, clockSize: TextUnit, compact: Boolean, modifi
     Column(modifier) {
         Row(verticalAlignment = Alignment.Bottom) {
             Column(Modifier.weight(1f)) {
-                Text((if (compact) now.format(DateTimeFormatter.ofPattern("EEE d MMM", FR)) else
-                    now.format(DateTimeFormatter.ofPattern("EEEE · d MMMM", FR))).uppercase(FR),
+                Text((if (compact) now.format(DateTimeFormatter.ofPattern("EEE MMM d", LOCALE)) else
+                    now.format(DateTimeFormatter.ofPattern("EEEE · MMMM d", LOCALE))).uppercase(LOCALE),
                     color = Holo.Muted, fontSize = 12.sp, letterSpacing = 3.sp, maxLines = 1)
                 IridescentText(now.format(DateTimeFormatter.ofPattern(pattern)), clockSize,
                     Modifier.clickable { runCatching { context.startActivity(Intent(AlarmClock.ACTION_SHOW_ALARMS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
-                        .semantics { contentDescription = "Heure ; ouvrir l’horloge" })
+                        .semantics { contentDescription = "Time; open clock" })
             }
             trailing?.invoke()
         }
@@ -114,7 +115,7 @@ fun ClockHeader(today: TodayState, clockSize: TextUnit, compact: Boolean, modifi
                 Chip("${e.title} ${e.start.format(DateTimeFormatter.ofPattern(pattern))}", Icons.Rounded.Event) { openCalendar(context) }
             }
             today.battery?.let { b ->
-                Chip("${b.level} %", if (b.charging) Icons.Rounded.BatteryChargingFull else Icons.Rounded.BatteryStd) {
+                Chip("${b.level}%", if (b.charging) Icons.Rounded.BatteryChargingFull else Icons.Rounded.BatteryStd) {
                     runCatching { context.startActivity(Intent(Intent.ACTION_POWER_USAGE_SUMMARY).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
                 }
             }
@@ -139,7 +140,7 @@ private fun Chip(text: String, icon: ImageVector, onClick: () -> Unit) {
     }
 }
 
-/** "Lecture en cours": artwork, title, controls. Tapping it opens the playing app. */
+/** "Now playing": artwork, title, controls. Tapping it opens the playing app. */
 @Composable
 fun NowPlayingCard(playing: NowPlaying, modifier: Modifier = Modifier, compactCard: Boolean = false, onOpen: () -> Unit) {
     Row(modifier.fillMaxWidth().glass(RoundedCornerShape(26.dp)).clickable(onClick = onOpen).padding(if (compactCard) 8.dp else 12.dp),
@@ -157,11 +158,11 @@ fun NowPlayingCard(playing: NowPlaying, modifier: Modifier = Modifier, compactCa
                     .background(Holo.Violet, CircleShape))
             }
         }
-        IconButton(onClick = MediaWatcher::previous, Modifier.size(40.dp)) { Icon(Icons.Rounded.SkipPrevious, "Précédent", tint = Holo.Ink) }
+        IconButton(onClick = MediaWatcher::previous, Modifier.size(40.dp)) { Icon(Icons.Rounded.SkipPrevious, "Previous", tint = Holo.Ink) }
         IconButton(onClick = MediaWatcher::toggle, Modifier.size(44.dp).glass(CircleShape, .1f)) {
-            Icon(if (playing.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (playing.playing) "Pause" else "Lecture", tint = Holo.Ink)
+            Icon(if (playing.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (playing.playing) "Pause" else "Play", tint = Holo.Ink)
         }
-        IconButton(onClick = MediaWatcher::next, Modifier.size(40.dp)) { Icon(Icons.Rounded.SkipNext, "Suivant", tint = Holo.Ink) }
+        IconButton(onClick = MediaWatcher::next, Modifier.size(40.dp)) { Icon(Icons.Rounded.SkipNext, "Next", tint = Holo.Ink) }
     }
 }
 
@@ -186,14 +187,14 @@ fun HeaderSearch(kind: String, onPliSearch: () -> Unit) {
                 else -> false
             }
             if (!ok) onPliSearch()
-        }.semantics { contentDescription = if (google) "Recherche Google" else if (finder) "Finder" else "Rechercher" },
+        }.semantics { contentDescription = if (google) "Google Search" else if (finder) "Finder" else "Search" },
             contentAlignment = Alignment.Center) {
             Icon(Icons.Rounded.Search, null, tint = Holo.Ink, modifier = Modifier.size(22.dp))
         }
         if (google) Box(Modifier.size(48.dp).clip(CircleShape).clickable {
             start(Intent(android.speech.RecognizerIntent.ACTION_WEB_SEARCH).setPackage(GOOGLE_APP)) ||
                 start(Intent(android.speech.RecognizerIntent.ACTION_WEB_SEARCH))
-        }.semantics { contentDescription = "Recherche vocale Google" }, contentAlignment = Alignment.Center) {
+        }.semantics { contentDescription = "Google voice search" }, contentAlignment = Alignment.Center) {
             Icon(Icons.Rounded.Mic, null, tint = Holo.Violet, modifier = Modifier.size(22.dp))
         }
         if (finder) Text("Finder", color = Holo.Soft, fontSize = 13.sp, modifier = Modifier.padding(end = 16.dp))
