@@ -31,12 +31,12 @@ data class AppInfo(
     val work: Boolean,
     val icon: ImageBitmap,
 ) {
-    /** Lower-case label without accents, for search. */
+    /** Lowercase label without accents, for search. */
     val searchKey: String = label.normalizedForSearch()
 }
 
 fun String.normalizedForSearch(): String =
-    Normalizer.normalize(lowercase(Locale.FRANCE), Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
+    Normalizer.normalize(lowercase(Locale.US), Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
 
 /** Lists apps through LauncherApps (all profiles, badged icons) and reports install/remove/update. */
 class AppRepository(private val context: Context) {
@@ -62,7 +62,7 @@ class AppRepository(private val context: Context) {
             styleKey = key
         }
         val mainUser = android.os.Process.myUserHandle()
-        val collator = Collator.getInstance(Locale.FRANCE).apply { strength = Collator.PRIMARY }
+        val collator = Collator.getInstance(Locale.US).apply { strength = Collator.PRIMARY }
         val result = ArrayList<AppInfo>()
         for (user in userManager.userProfiles) {
             if (user != mainUser && runCatching { userManager.isQuietModeEnabled(user) }.getOrDefault(false)) continue
