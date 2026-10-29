@@ -125,13 +125,13 @@ private fun ChoiceRow(title: String, detail: String?, options: List<Int>, select
 }
 
 private enum class SettingsCategory(val label: String, val icon: ImageVector, val subs: List<Pair<String, ImageVector>>) {
-    THEMES("Thèmes", Icons.Rounded.Palette, listOf("Fond" to Icons.Rounded.Wallpaper, "Icônes" to Icons.Rounded.Category, "Forme" to Icons.Rounded.Interests, "Animations" to Icons.Rounded.AutoAwesome)),
-    HOME("Accueil", Icons.Rounded.PhoneAndroid, listOf("Grille" to Icons.Rounded.GridView, "Dock" to Icons.Rounded.Dock,
-        "Horloge" to Icons.Rounded.Schedule, "Pages" to Icons.Rounded.ViewCarousel)),
-    APPS("Applis", Icons.Rounded.Apps, listOf("Masquées" to Icons.Rounded.VisibilityOff, "Ajout" to Icons.Rounded.AddToHomeScreen)),
-    WIDGETS("Widgets", Icons.Rounded.Widgets, listOf("Météo" to Icons.Rounded.WbSunny, "Notifications" to Icons.Rounded.Notifications)),
-    GESTURES("Gestes", Icons.Rounded.Swipe, listOf("Gestes" to Icons.Rounded.TouchApp)),
-    GENERAL("Paramètres", Icons.Rounded.Settings, listOf("Général" to Icons.Rounded.Tune, "Sauvegarde" to Icons.Rounded.Backup)),
+    THEMES("Themes", Icons.Rounded.Palette, listOf("Background" to Icons.Rounded.Wallpaper, "Icons" to Icons.Rounded.Category, "Shape" to Icons.Rounded.Interests, "Animations" to Icons.Rounded.AutoAwesome)),
+    HOME("Home", Icons.Rounded.PhoneAndroid, listOf("Grid" to Icons.Rounded.GridView, "Dock" to Icons.Rounded.Dock,
+        "Clock" to Icons.Rounded.Schedule, "Pages" to Icons.Rounded.ViewCarousel)),
+    APPS("Apps", Icons.Rounded.Apps, listOf("Hidden" to Icons.Rounded.VisibilityOff, "Adding" to Icons.Rounded.AddToHomeScreen)),
+    WIDGETS("Widgets", Icons.Rounded.Widgets, listOf("Weather" to Icons.Rounded.WbSunny, "Notifications" to Icons.Rounded.Notifications)),
+    GESTURES("Gestures", Icons.Rounded.Swipe, listOf("Gestures" to Icons.Rounded.TouchApp)),
+    GENERAL("Settings", Icons.Rounded.Settings, listOf("General" to Icons.Rounded.Tune, "Backup" to Icons.Rounded.Backup)),
 }
 
 /** One entry of the side rails: a round icon with its name; the chosen one glows. */
@@ -245,8 +245,8 @@ fun SettingsPanel(
         val height = maxHeight
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                IridescentText("Réglages", 28.sp, Modifier.weight(1f), letterSpacing = (-.5).sp)
-                PillButton("Fermer", onClick = onClose)
+                IridescentText("Settings", 28.sp, Modifier.weight(1f), letterSpacing = (-.5).sp)
+                PillButton("Close", onClick = onClose)
             }
             if (wide) Row(Modifier.fillMaxSize()) {
                 rails(Modifier.weight(1f).fillMaxHeight().padding(bottom = 10.dp))
@@ -272,32 +272,32 @@ private fun SettingsOptions(
     val s = launcher.settings
     val context = androidx.compose.ui.platform.LocalContext.current
     when (category to sub) {
-        SettingsCategory.THEMES to "Fond" -> Section("Arrière-plan") {
-            ToggleRow("Fond holographique", if (s.phoneWallpaper) "Ton fond d’écran du téléphone est utilisé" else "Noir profond avec halos de couleur",
+        SettingsCategory.THEMES to "Background" -> Section("Background") {
+            ToggleRow("Holographic background", if (s.phoneWallpaper) "Your phone wallpaper is being used" else "Deep black with colored halos",
                 !s.phoneWallpaper) { v -> launcher.updateSettings { it.copy(phoneWallpaper = !v) } }
-            ToggleRow("Halos animés", "Les couleurs bougent quand tu inclines le téléphone", s.parallax) { v -> launcher.updateSettings { it.copy(parallax = v) } }
-            ActionRow("Changer le fond d’écran du téléphone", "Utilisé quand le fond holographique est coupé", "Ouvrir") {
+            ToggleRow("Animated halos", "Colors move when you tilt the phone", s.parallax) { v -> launcher.updateSettings { it.copy(parallax = v) } }
+            ActionRow("Change phone wallpaper", "Used when the holographic background is off", "Open") {
                 runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_SET_WALLPAPER).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
             }
         }
-        SettingsCategory.THEMES to "Icônes" -> {
+        SettingsCategory.THEMES to "Icons" -> {
             val packs = remember { IconPacks.installed(context) }
-            Section("Pack d’icônes") {
+            Section("Icon pack") {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
-                    Text(if (packs.isEmpty()) "Installe un pack d’icônes depuis le Play Store (format Nova / ADW)" else "Les applis absentes du pack gardent leur icône",
+                    Text(if (packs.isEmpty()) "Install an icon pack from the Play Store (Nova / ADW format)" else "Apps missing from the pack keep their own icon",
                         color = Holo.Muted, fontSize = 12.sp)
                     Row(Modifier.padding(top = 8.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        (listOf(IconPackInfo("", "Aucun")) + packs).forEach { p ->
+                        (listOf(IconPackInfo("", "None")) + packs).forEach { p ->
                             PillButton(p.label, highlighted = s.iconPack == p.packageName) { launcher.updateSettings { it.copy(iconPack = p.packageName) } }
                         }
                     }
                 }
-                ToggleRow("Icônes teintées", "Monochromes aux couleurs holographiques", s.tintedIcons) { v -> launcher.updateSettings { it.copy(tintedIcons = v) } }
-                ToggleRow("Noms des applis", null, s.labels) { v -> launcher.updateSettings { it.copy(labels = v) } }
+                ToggleRow("Tinted icons", "Monochrome in holographic colors", s.tintedIcons) { v -> launcher.updateSettings { it.copy(tintedIcons = v) } }
+                ToggleRow("App names", null, s.labels) { v -> launcher.updateSettings { it.copy(labels = v) } }
             }
         }
-        SettingsCategory.THEMES to "Forme" -> Section("Forme des icônes") {
-            ToggleRow("Cadre de verre", "Sinon, l’icône seule dans la forme choisie", s.bubbles) { v -> launcher.updateSettings { it.copy(bubbles = v) } }
+        SettingsCategory.THEMES to "Shape" -> Section("Icon shape") {
+            ToggleRow("Glass frame", "Otherwise, just the icon in the chosen shape", s.bubbles) { v -> launcher.updateSettings { it.copy(bubbles = v) } }
             val sample = launcher.visibleApps.firstOrNull()
             Row(Modifier.padding(12.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 ICON_SHAPES.forEach { (key, name) ->
@@ -313,88 +313,88 @@ private fun SettingsOptions(
                 }
             }
         }
-        SettingsCategory.THEMES to "Animations" -> Section("Ouverture des applis") {
-            val choices = listOf("holo" to "Holographique", "system" to "Système")
-            Text("Holographique : un anneau irisé jaillit de l’icône et l’appli grandit depuis sa bulle.", color = Holo.Muted, fontSize = 12.sp,
+        SettingsCategory.THEMES to "Animations" -> Section("App opening") {
+            val choices = listOf("holo" to "Holographic", "system" to "System")
+            Text("Holographic: an iridescent ring bursts from the icon and the app grows out of its bubble.", color = Holo.Muted, fontSize = 12.sp,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 choices.forEach { (key, name) -> PillButton(name, highlighted = s.launchAnimation == key) { launcher.updateSettings { it.copy(launchAnimation = key) } } }
             }
         }
-        SettingsCategory.HOME to "Grille" -> {
-            Section("Écran externe") {
-                ChoiceRow("Colonnes", null, listOf(0, 3, 4, 5, 6), s.coverColumns) { v -> launcher.updateSettings { it.copy(coverColumns = v) } }
-                ChoiceRow("Lignes", null, listOf(0, 4, 5, 6, 7, 8), s.coverRows) { v -> launcher.updateSettings { it.copy(coverRows = v) } }
+        SettingsCategory.HOME to "Grid" -> {
+            Section("Cover screen") {
+                ChoiceRow("Columns", null, listOf(0, 3, 4, 5, 6), s.coverColumns) { v -> launcher.updateSettings { it.copy(coverColumns = v) } }
+                ChoiceRow("Rows", null, listOf(0, 4, 5, 6, 7, 8), s.coverRows) { v -> launcher.updateSettings { it.copy(coverRows = v) } }
             }
-            Section("Écran interne") {
-                ChoiceRow("Colonnes", null, listOf(0, 3, 4, 5, 6, 7, 8), s.innerColumns) { v -> launcher.updateSettings { it.copy(innerColumns = v) } }
-                ChoiceRow("Lignes", null, listOf(0, 4, 5, 6, 7, 8, 9), s.innerRows) { v -> launcher.updateSettings { it.copy(innerRows = v) } }
+            Section("Inner screen") {
+                ChoiceRow("Columns", null, listOf(0, 3, 4, 5, 6, 7, 8), s.innerColumns) { v -> launcher.updateSettings { it.copy(innerColumns = v) } }
+                ChoiceRow("Rows", null, listOf(0, 4, 5, 6, 7, 8, 9), s.innerRows) { v -> launcher.updateSettings { it.copy(innerRows = v) } }
             }
         }
         SettingsCategory.HOME to "Dock" -> Section("Dock") {
-            ChoiceRow("Écran externe", "Les mêmes en premier sur l’écran interne", (3..6).toList(), s.dockSize) { v ->
+            ChoiceRow("Cover screen", "The same ones come first on the inner screen", (3..6).toList(), s.dockSize) { v ->
                 launcher.updateSettings { it.copy(dockSize = v, innerDockSize = maxOf(v, it.innerDockSize)) } }
-            ChoiceRow("Écran interne", "Jusqu’à 10 ; celles en plus n’apparaissent que dépliées", (s.dockSize..10).toList(), s.innerDockSize.coerceAtLeast(s.dockSize)) { v ->
+            ChoiceRow("Inner screen", "Up to 10; extra ones only show when expanded", (s.dockSize..10).toList(), s.innerDockSize.coerceAtLeast(s.dockSize)) { v ->
                 launcher.updateSettings { it.copy(innerDockSize = v) } }
-            ChoiceRow("Applis récentes au bout du dock (interne)", null, listOf(0, 1, 2, 3), s.recentInDock) { v -> launcher.updateSettings { it.copy(recentInDock = v) } }
+            ChoiceRow("Recent apps at the end of the dock (inner)", null, listOf(0, 1, 2, 3), s.recentInDock) { v -> launcher.updateSettings { it.copy(recentInDock = v) } }
         }
-        SettingsCategory.HOME to "Horloge" -> Section("À droite de l’horloge") {
-            val choices = listOf("google" to "Recherche Google", "finder" to "Finder Samsung", "pli" to "Recherche Fold Launcher Pro", "none" to "Rien")
+        SettingsCategory.HOME to "Clock" -> Section("Right of the clock") {
+            val choices = listOf("google" to "Google Search", "finder" to "Samsung Finder", "pli" to "Fold Launcher Pro search", "none" to "None")
             Row(Modifier.padding(16.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 choices.forEach { (key, name) -> PillButton(name, highlighted = s.headerSearch == key) { launcher.updateSettings { it.copy(headerSearch = key) } } }
             }
         }
-        SettingsCategory.HOME to "Pages" -> Section("Pages d’accueil") {
-            ToggleRow("Verrouiller la disposition", "Empêche de déplacer ou retirer des icônes par erreur", s.lockLayout) { v -> launcher.updateSettings { it.copy(lockLayout = v) } }
-            ToggleRow("Page Actus", "Tout à gauche : Google Actualités, Le Monde, franceinfo", s.discover) { v -> launcher.updateSettings { it.copy(discover = v) } }
-            ToggleRow("Ajouter les nouvelles applis", "Une appli installée apparaît sur les deux écrans", s.addNewApps) { v -> launcher.updateSettings { it.copy(addNewApps = v) } }
+        SettingsCategory.HOME to "Pages" -> Section("Home pages") {
+            ToggleRow("Lock layout", "Prevents moving or removing icons by accident", s.lockLayout) { v -> launcher.updateSettings { it.copy(lockLayout = v) } }
+            ToggleRow("News page", "Far left: Google News, Le Monde, franceinfo", s.discover) { v -> launcher.updateSettings { it.copy(discover = v) } }
+            ToggleRow("Add new apps", "A newly installed app appears on both screens", s.addNewApps) { v -> launcher.updateSettings { it.copy(addNewApps = v) } }
         }
-        SettingsCategory.APPS to "Masquées" -> Section("Applis masquées") {
+        SettingsCategory.APPS to "Hidden" -> Section("Hidden apps") {
             val hidden = launcher.layout.hidden.toList()
-            if (hidden.isEmpty()) Text("Aucune. Maintiens une appli puis « Masquer l’appli ».", color = Holo.Muted, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
+            if (hidden.isEmpty()) Text("None. Long-press an app, then tap “Hide app”.", color = Holo.Muted, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
             hidden.forEach { id ->
                 val app = launcher.byId[id]
                 Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (app != null) AppIcon(app, 36.dp, showBadge = false)
                     Text(app?.label ?: id.substringBefore('/'), color = Holo.Ink, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f).padding(horizontal = 12.dp))
-                    PillButton("Afficher") { launcher.unhide(id) }
+                    PillButton("Show") { launcher.unhide(id) }
                 }
             }
         }
-        SettingsCategory.APPS to "Ajout" -> Section("Nouvelles applis") {
-            ToggleRow("Ajouter à l’accueil à l’installation", "Sur les deux écrans, dans la première case libre", s.addNewApps) { v -> launcher.updateSettings { it.copy(addNewApps = v) } }
-            Text("Pour en ajouter plusieurs : appui long sur une case vide → « Ajouter des applis ».", color = Holo.Muted, fontSize = 12.sp,
+        SettingsCategory.APPS to "Adding" -> Section("New apps") {
+            ToggleRow("Add to home on install", "On both screens, in the first free slot", s.addNewApps) { v -> launcher.updateSettings { it.copy(addNewApps = v) } }
+            Text("To add several at once: long-press an empty slot → “Add apps”.", color = Holo.Muted, fontSize = 12.sp,
                 modifier = Modifier.padding(16.dp))
         }
-        SettingsCategory.WIDGETS to "Météo" -> WeatherSettings(launcher, onLocation, onWeatherChanged)
+        SettingsCategory.WIDGETS to "Weather" -> WeatherSettings(launcher, onLocation, onWeatherChanged)
         SettingsCategory.WIDGETS to "Notifications" -> Section("Notifications") {
-            ActionRow("Pastilles, aperçus et musique en cours", if (badgesAllowed) "Accès aux notifications activé" else "Demande l’accès aux notifications",
-                if (badgesAllowed) "Ouvrir" else "Activer", onNotificationAccess)
+            ActionRow("Badges, previews and now-playing music", if (badgesAllowed) "Notification access is on" else "Asks for notification access",
+                if (badgesAllowed) "Open" else "Enable", onNotificationAccess)
         }
-        SettingsCategory.GESTURES to "Gestes" -> Section("Gestes sur l’accueil") {
-            ActionRow("Guide des gestes", "Tous les gestes de Fold Launcher Pro expliqués", "Voir", onGuide)
-            ToggleRow("Glisser vers le bas en haut de l’écran", "Ouvre les notifications (ailleurs : la recherche)", s.swipeDownNotifications) { v ->
+        SettingsCategory.GESTURES to "Gestures" -> Section("Home screen gestures") {
+            ActionRow("Gesture guide", "All Fold Launcher Pro gestures explained", "View", onGuide)
+            ToggleRow("Swipe down from the top of the screen", "Opens notifications (elsewhere: search)", s.swipeDownNotifications) { v ->
                 launcher.updateSettings { it.copy(swipeDownNotifications = v) } }
-            GestureRow("Double appui sur un espace vide", s.doubleTap, launcher, onPick = { onPick("doubleTap") }) { v -> launcher.updateSettings { it.copy(doubleTap = v) } }
-            GestureRow("Glisser à deux doigts vers le haut", s.twoFingerUp, launcher, onPick = { onPick("twoFingerUp") }) { v -> launcher.updateSettings { it.copy(twoFingerUp = v) } }
-            GestureRow("Glisser à deux doigts vers le bas", s.twoFingerDown, launcher, onPick = { onPick("twoFingerDown") }) { v -> launcher.updateSettings { it.copy(twoFingerDown = v) } }
+            GestureRow("Double-tap on an empty space", s.doubleTap, launcher, onPick = { onPick("doubleTap") }) { v -> launcher.updateSettings { it.copy(doubleTap = v) } }
+            GestureRow("Two-finger swipe up", s.twoFingerUp, launcher, onPick = { onPick("twoFingerUp") }) { v -> launcher.updateSettings { it.copy(twoFingerUp = v) } }
+            GestureRow("Two-finger swipe down", s.twoFingerDown, launcher, onPick = { onPick("twoFingerDown") }) { v -> launcher.updateSettings { it.copy(twoFingerDown = v) } }
             if (listOf(s.doubleTap, s.twoFingerUp, s.twoFingerDown).contains("lock") && !accessibilityOn)
-                ActionRow("Verrouiller demande une autorisation", "Active « Fold Launcher Pro – verrouillage par geste » dans Accessibilité", "Activer", onAccessibility)
+                ActionRow("Lock needs a permission", "Turn on “Fold Launcher Pro – gesture lock” in Accessibility", "Enable", onAccessibility)
         }
-        SettingsCategory.GENERAL to "Général" -> Section("Fold Launcher Pro") {
-            if (!isDefaultHome) ActionRow("Faire de Fold Launcher Pro l’appli d’accueil", "Pour le bouton Accueil, les raccourcis et les deux écrans", "Choisir", onMakeDefault)
-            else Text("Fold Launcher Pro est ton appli d’accueil.", color = Holo.Soft, fontSize = 14.sp, modifier = Modifier.padding(16.dp))
-            ToggleRow("Vibrations", "Petit retour haptique sur les appuis longs et les déplacements", s.haptics) { v -> launcher.updateSettings { it.copy(haptics = v) } }
-            ToggleRow("Économie de batterie", "Sous 20 % (hors charge) : halos figés et ouverture des applis simple", s.batterySaver) { v ->
+        SettingsCategory.GENERAL to "General" -> Section("Fold Launcher Pro") {
+            if (!isDefaultHome) ActionRow("Make Fold Launcher Pro your home app", "For the Home button, shortcuts and both screens", "Choose", onMakeDefault)
+            else Text("Fold Launcher Pro is your home app.", color = Holo.Soft, fontSize = 14.sp, modifier = Modifier.padding(16.dp))
+            ToggleRow("Vibration", "Light haptic feedback on long presses and moves", s.haptics) { v -> launcher.updateSettings { it.copy(haptics = v) } }
+            ToggleRow("Battery saver", "Below 20% (when not charging): halos frozen and simple app opening", s.batterySaver) { v ->
                 launcher.updateSettings { it.copy(batterySaver = v) } }
-            ActionRow("Guide des gestes", "Tous les gestes de Fold Launcher Pro expliqués", "Voir", onGuide)
-            ActionRow("Revoir la présentation", "Les étapes du premier lancement", "Ouvrir", onOnboarding)
-            Text("Fold Launcher Pro · launcher holographique pour Galaxy Z Fold", color = Holo.Muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            ActionRow("Gesture guide", "All Fold Launcher Pro gestures explained", "View", onGuide)
+            ActionRow("Replay the intro", "The first-launch steps", "Open", onOnboarding)
+            Text("Fold Launcher Pro · holographic launcher for Galaxy Z Fold", color = Holo.Muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         }
-        SettingsCategory.GENERAL to "Sauvegarde" -> Section("Sauvegarde") {
-            ActionRow("Exporter ma disposition", "Pages, dossiers, dock, widgets Fold Launcher Pro et réglages dans un fichier", "Exporter", onExport)
-            ActionRow("Importer une disposition", "Remplace la disposition actuelle", "Importer", onImport)
+        SettingsCategory.GENERAL to "Backup" -> Section("Backup") {
+            ActionRow("Export my layout", "Pages, folders, dock, Fold Launcher Pro widgets and settings in one file", "Export", onExport)
+            ActionRow("Import a layout", "Replaces the current layout", "Import", onImport)
         }
         else -> Unit
     }
@@ -406,22 +406,22 @@ internal fun WeatherSettings(launcher: Launcher, onLocation: () -> Unit, onWeath
     var city by remember { mutableStateOf(launcher.settings.city) }
     var cityStatus by remember { mutableStateOf<String?>(null) }
     fun validate() = scope.launch {
-        cityStatus = "Recherche…"
+        cityStatus = "Searching…"
         val found = findCity(city)
-        if (found == null) cityStatus = "Ville introuvable ou pas de connexion"
+        if (found == null) cityStatus = "City not found or no connection"
         else {
             launcher.updateSettings { it.copy(city = found.first, latitude = found.second, longitude = found.third) }
-            city = found.first; cityStatus = "Météo de ${found.first}"; onWeatherChanged()
+            city = found.first; cityStatus = "Weather for ${found.first}"; onWeatherChanged()
         }
     }
-    Section("Ville de la météo") {
+    Section("Weather city") {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            GlassField(city, { city = it }, "Ville (ex. Paris)", null, Modifier.fillMaxWidth(), onDone = { validate() })
+            GlassField(city, { city = it }, "City (e.g. Paris)", null, Modifier.fillMaxWidth(), onDone = { validate() })
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                PillButton("Valider la ville", true) { validate() }
-                PillButton("Ma position") {
+                PillButton("Confirm city", true) { validate() }
+                PillButton("My location") {
                     launcher.updateSettings { it.copy(city = "", latitude = null, longitude = null) }
-                    city = ""; cityStatus = "Position du téléphone utilisée"; onLocation()
+                    city = ""; cityStatus = "Using the phone’s location"; onLocation()
                 }
             }
             cityStatus?.let { Text(it, color = Holo.Muted, fontSize = 12.sp) }
@@ -429,8 +429,8 @@ internal fun WeatherSettings(launcher: Launcher, onLocation: () -> Unit, onWeath
     }
 }
 
-private val GESTURE_ACTIONS = listOf("none" to "Rien", "lock" to "Verrouiller", "notifications" to "Notifications",
-    "search" to "Recherche", "drawer" to "Toutes les applis")
+private val GESTURE_ACTIONS = listOf("none" to "None", "lock" to "Lock", "notifications" to "Notifications",
+    "search" to "Search", "drawer" to "All apps")
 
 @Composable
 private fun GestureRow(title: String, value: String, launcher: Launcher, onPick: () -> Unit, onSelect: (String) -> Unit) {
@@ -438,7 +438,7 @@ private fun GestureRow(title: String, value: String, launcher: Launcher, onPick:
         Text(title, color = Holo.Ink, fontSize = 15.sp)
         Row(Modifier.padding(top = 8.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             val app = if (value.startsWith("app:")) launcher.byId[value.removePrefix("app:")] else null
-            (GESTURE_ACTIONS + ("app" to (app?.label ?: "Ouvrir une appli…"))).forEach { (key, label) ->
+            (GESTURE_ACTIONS + ("app" to (app?.label ?: "Open an app…"))).forEach { (key, label) ->
                 val on = value == key || (key == "app" && value.startsWith("app:"))
                 Box(Modifier.height(38.dp).clip(RoundedCornerShape(50))
                     .then(if (on) Modifier.background(Brush.linearGradient(Holo.Iridescent), RoundedCornerShape(50)) else Modifier.glass(RoundedCornerShape(50)))
@@ -458,10 +458,10 @@ private fun AppPick(launcher: Launcher, modifier: Modifier, onClose: () -> Unit,
     val shown = remember(filter, apps) { if (filter.isBlank()) apps else matchApps(apps, filter) }
     Column(modifier) {
         Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            IridescentText("Choisir une appli", 26.sp, Modifier.weight(1f), letterSpacing = 0.sp)
-            PillButton("Retour", onClick = onClose)
+            IridescentText("Choose an app", 26.sp, Modifier.weight(1f), letterSpacing = 0.sp)
+            PillButton("Back", onClick = onClose)
         }
-        GlassField(filter, { filter = it }, "Filtrer", null, Modifier.fillMaxWidth())
+        GlassField(filter, { filter = it }, "Filter", null, Modifier.fillMaxWidth())
         Column(Modifier.padding(top = 10.dp).verticalScroll(rememberScrollState())) {
             shown.forEach { app ->
                 Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(18.dp)).clickable { onPick(app) }
