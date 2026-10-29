@@ -187,7 +187,7 @@ fun applyDrop(launcher: Launcher, source: DragSource, spot: DropSpot, drag: Drag
         }
         DropSpot.Dock(spot.screen, index)
     } else spot
-    launcher.edit(if (spot == DropSpot.Remove) "Retiré de l’accueil" else "Déplacé") { LayoutEdits.drop(it, source, mapped, launcher.dockSizes) }
+    launcher.edit(if (spot == DropSpot.Remove) "Removed from home" else "Moved") { LayoutEdits.drop(it, source, mapped, launcher.dockSizes) }
 }
 
 /** Press-and-hold then drag. A hold without moving opens the menu ([onHold]); moving starts the drag and closes it. */
@@ -395,7 +395,7 @@ private fun HomeCell(
     val selection = LocalSelection.current
     Column(Modifier.fillMaxSize()
         .onGloballyPositioned { bounds = it.boundsInRoot(); drag.homeCells[index] = bounds }
-        .semantics { contentDescription = if (folder != null) "Dossier $label" else label }
+        .semantics { contentDescription = if (folder != null) "Folder $label" else label }
         .clickable(interaction, null, role = Role.Button) {
             if (selection.active) selection.toggle(id)
             else if (folder != null) onOpenFolder(id) else app?.let { onOpenApp(it, bounds) }
@@ -450,7 +450,7 @@ fun FolderIcon(apps: List<AppInfo>, size: Dp, highlighted: Boolean = false) {
     }
 }
 
-/** Page dots. The first [leading] dots (Discover, Aujourd'hui) are tinted cyan. */
+/** Page dots. The first [leading] dots (Discover, Today) are tinted cyan. */
 @Composable
 fun PageDots(pager: PagerState, count: Int, leading: Int, modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
@@ -459,7 +459,7 @@ fun PageDots(pager: PagerState, count: Int, leading: Int, modifier: Modifier = M
         repeat(count) { i ->
             val current = pager.currentPage == i
             Box(Modifier.size(18.dp).clip(CircleShape).clickable { scope.launch { pager.animateScrollToPage(i) } }
-                .semantics { contentDescription = if (i < leading) "Page spéciale ${i + 1}" else "Page ${i - leading + 1}" },
+                .semantics { contentDescription = if (i < leading) "Special page ${i + 1}" else "Page ${i - leading + 1}" },
                 contentAlignment = Alignment.Center) {
                 val color = when { current -> null; i < leading -> Holo.Cyan.copy(alpha = .55f); else -> Color.White.copy(alpha = .35f) }
                 Box(Modifier.size(if (current) 7.dp else 5.dp).background(
@@ -490,7 +490,7 @@ fun Dock(
             .onGloballyPositioned { drag.dockRect = it.boundsInRoot() }
             .padding(horizontal = 12.dp),
             horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-            if (ids.isEmpty()) Text("Glisse une appli ici", color = Holo.Muted, fontSize = 13.sp)
+            if (ids.isEmpty()) Text("Drag an app here", color = Holo.Muted, fontSize = 13.sp)
             ids.forEachIndexed { index, id ->
                 val app = launcher.byId[id] ?: return@forEachIndexed
                 key(id) {
@@ -527,7 +527,7 @@ fun Dock(
                 recents.forEach { app ->
                     var bounds by remember { mutableStateOf(Rect.Zero) }
                     Box(Modifier.size(icon).onGloballyPositioned { bounds = it.boundsInRoot() }
-                        .semantics { contentDescription = "Récente : ${app.label}" }
+                        .semantics { contentDescription = "Recent: ${app.label}" }
                         .clickable(remember { MutableInteractionSource() }, null, role = Role.Button) { onOpenApp(app, bounds) }
                         .alpha(.85f)) { AppIcon(app, icon) }
                 }
@@ -541,7 +541,7 @@ fun Dock(
 fun SearchOrb(size: Dp, onClick: () -> Unit) {
     Box(Modifier.size(size).halo(Holo.Violet.copy(alpha = .45f), size * .3f)
         .background(Brush.linearGradient(listOf(Holo.Cyan, Holo.Violet, Holo.Pink)), CircleShape)
-        .clip(CircleShape).clickable(onClick = onClick).semantics { contentDescription = "Rechercher" },
+        .clip(CircleShape).clickable(onClick = onClick).semantics { contentDescription = "Search" },
         contentAlignment = Alignment.Center) {
         Icon(Icons.Rounded.Search, null, tint = Color(0xFF120A22), modifier = Modifier.size(size * .42f))
     }
