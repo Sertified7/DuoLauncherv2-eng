@@ -11,7 +11,7 @@ data class Folder(val id: String, val title: String, val apps: List<String>, val
     val big get() = w != 1 || h != 1
 }
 
-/** A card in the "Aujourd'hui" column: a built-in widget or an Android widget. */
+/** A card in the "Today" column: a built-in widget or an Android widget. */
 /** [stack]: cards sharing the same non-empty stack sit on top of each other and are swiped through. */
 data class TodayItem(val key: String, val kind: String, val widgetId: Int = -1, val height: Int = 0, val stack: String = "") {
     val isAndroid get() = kind == KIND_ANDROID
@@ -112,7 +112,7 @@ data class HomeLayout(
             val folders = json.optJSONArray("folders")?.let { a ->
                 (0 until a.length()).mapNotNull { i -> a.optJSONObject(i) }.map { o ->
                     val apps = o.optJSONArray("apps")?.let { x -> List(x.length()) { x.optString(it) } } ?: emptyList()
-                    Folder(o.optString("id"), o.optString("title", "Dossier"), apps, o.optInt("w", 1), o.optInt("h", 1))
+                    Folder(o.optString("id"), o.optString("title", "Folder"), apps, o.optInt("w", 1), o.optInt("h", 1))
                 }.associateBy { it.id }
             } ?: emptyMap()
             val today = json.optJSONArray("today")?.let { a ->
@@ -139,9 +139,9 @@ sealed interface DropSpot {
     /** Onto the item at [index] (an app or a folder): makes or fills a folder. */
     data class Into(val screen: Screen, val index: Int) : DropSpot
     data class Dock(val screen: Screen, val index: Int) : DropSpot
-    /** On the bin: taken off the home screen or dock (the app stays in the app list). */
+    /** On the trash: taken off the home screen or dock (the app stays in the app list). */
     data object Remove : DropSpot
-    /** On the inner screen's "Écran partagé" zone: opens the app next to the last one (no layout change). */
+    /** On the inner screen's "Split screen" zone: opens the app next to the last one (no layout change). */
     data object Split : DropSpot
 }
 
@@ -324,7 +324,7 @@ object LayoutEdits {
                 } else {
                     val folderId = HomeLayout.FOLDER_PREFIX + System.nanoTime().toString(36)
                     base.withHome(spot.screen, list.toMutableList().apply { set(at, folderId) })
-                        .let { it.copy(folders = it.folders + (folderId to Folder(folderId, "Dossier", listOf(targetId, id)))) }
+                        .let { it.copy(folders = it.folders + (folderId to Folder(folderId, "Folder", listOf(targetId, id)))) }
                 }
             }
         }
