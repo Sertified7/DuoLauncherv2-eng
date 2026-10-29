@@ -95,7 +95,7 @@ interface PliHost {
     fun importBackup()
     /** Asks for the fingerprint (or the screen lock), then runs [onSuccess]. */
     fun authenticate(title: String, onSuccess: () -> Unit)
-    /** Lets the user pick a picture; [onPicked] gets its address. */
+    /** Lets the user pick a picture; [onPicked] gets its URI. */
     fun pickImage(onPicked: (android.net.Uri) -> Unit)
     /** Opens [first] (if any), then [second] next to it in split screen. */
     fun launchSplit(first: AppInfo?, second: AppInfo)
@@ -168,7 +168,7 @@ fun PliApp(host: PliHost, signals: HostSignals) {
     var showToday by remember { mutableIntStateOf(0) }
     var screen by remember { mutableStateOf(Screen.COVER) }
     val drag = remember { DragState() }
-    // Battery saver: below 20 % and not charging.
+    // Battery saver: below 20% and not charging.
     LaunchedEffect(today.battery, launcher.settings.batterySaver) {
         val b = today.battery
         launcher.lowPower = launcher.settings.batterySaver && b != null && b.level <= 20 && !b.charging
@@ -199,16 +199,16 @@ fun PliApp(host: PliHost, signals: HostSignals) {
             if (panel == Panel.SEARCH || panel == Panel.DRAWER) panel = Panel.NONE
             folder = null
         }
-        if (app.id in launcher.layout.protectedApps) host.authenticate("Ouvrir ${app.label}", go) else go()
+        if (app.id in launcher.layout.protectedApps) host.authenticate("Open ${app.label}", go) else go()
     }
     var renameApp by remember { mutableStateOf<AppInfo?>(null) }
     var iconApp by remember { mutableStateOf<AppInfo?>(null) }
     drag.locked = launcher.settings.lockLayout
-    // Dropping an app on "Écran partagé" (inner screen) opens it next to the last app used.
+    // Dropping an app on "Split screen" (inner screen) opens it next to the last app used.
     drag.onSplit = { id ->
         launcher.byId[id]?.let { app -> host.launchSplit(splitPartner(launcher, context, id), app) }
     }
-    // Swipe up on an app icon opens its favourite shortcut.
+    // Swipe up on an app icon opens its favorite shortcut.
     drag.onIconSwipeUp = { id ->
         launcher.byId[id]?.let { app ->
             val shortcuts = loadAppShortcuts(context, app)
@@ -257,7 +257,7 @@ fun PliApp(host: PliHost, signals: HostSignals) {
                 if (wide) key("inner", launcher.settings.discover) { InnerHome(host, signals, today, drag, actions, swipesOn, showToday) }
                 else key("cover", launcher.settings.discover) { CoverHome(host, signals, today, drag, actions, swipesOn, showToday) }
             }
-            // Bin at the top while dragging: a full-width bar over the clock, drop an icon on it to take it off the home screen.
+            // Trash at the top while dragging: a full-width bar over the clock, drop an icon on it to take it off the home screen.
             if (drag.active) TopBar(Modifier, highlight = false) {
                 val over = drag.spot == DropSpot.Remove
                 val splitOn = screen == Screen.INNER && drag.draggedId?.let { !HomeLayout.isFolder(it) } == true
@@ -266,7 +266,7 @@ fun PliApp(host: PliHost, signals: HostSignals) {
                         .background(if (over) Holo.Badge.copy(alpha = .2f) else Color.Transparent),
                         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Rounded.Delete, null, tint = if (over) Holo.Badge else Holo.Ink)
-                        Text("Retirer de l’accueil", color = if (over) Holo.Badge else Holo.Ink, fontSize = 15.sp, modifier = Modifier.padding(start = 10.dp))
+                        Text("Remove from Home", color = if (over) Holo.Badge else Holo.Ink, fontSize = 15.sp, modifier = Modifier.padding(start = 10.dp))
                     }
                     if (splitOn) {
                         val overSplit = drag.spot == DropSpot.Split
@@ -276,7 +276,7 @@ fun PliApp(host: PliHost, signals: HostSignals) {
                             .background(if (overSplit) Holo.Violet.copy(alpha = .2f) else Color.Transparent),
                             horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Rounded.VerticalSplit, null, tint = if (overSplit) Holo.Violet else Holo.Ink)
-                            Text(if (partner != null) "Écran partagé avec ${partner.label}" else "Ouvrir en écran partagé",
+                            Text(if (partner != null) "Split screen with ${partner.label}" else "Open in split screen",
                                 color = if (overSplit) Holo.Violet else Holo.Ink, fontSize = 15.sp, maxLines = 1,
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(start = 10.dp))
                         }
@@ -288,18 +288,18 @@ fun PliApp(host: PliHost, signals: HostSignals) {
             // Selection mode: pick several icons, then remove them together.
             if (selection.active) TopBar(Modifier, highlight = false) {
                 val n = selection.ids.size
-                Text(if (n == 0) "Touche les applis à retirer" else "$n sélectionnée" + if (n > 1) "s" else "",
+                Text(if (n == 0) "Tap apps to remove" else "$n selected",
                     color = Holo.Ink, fontSize = 15.sp, modifier = Modifier.padding(end = 16.dp))
                 if (n > 0) Row(Modifier.padding(end = 10.dp).clip(RoundedCornerShape(50)).background(Holo.Badge.copy(alpha = .9f))
                     .clickable {
                         val ids = selection.ids.toSet()
-                        launcher.edit("${ids.size} retirée" + if (ids.size > 1) "s" else "") { LayoutEdits.removeMany(it, screen, ids) }
+                        launcher.edit("${ids.size} removed") { LayoutEdits.removeMany(it, screen, ids) }
                         selection.clear()
                     }.padding(horizontal = 16.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.Delete, null, tint = Color(0xFF1A0512), modifier = Modifier.size(18.dp))
-                    Text("Retirer", color = Color(0xFF1A0512), fontSize = 14.sp, modifier = Modifier.padding(start = 6.dp))
+                    Text("Remove", color = Color(0xFF1A0512), fontSize = 14.sp, modifier = Modifier.padding(start = 6.dp))
                 }
-                PillButton("Terminé", onClick = selection::clear)
+                PillButton("Done", onClick = selection::clear)
             }
 
             FullPanel(article != null) { m -> article?.let { ArticleReader(it, m) { article = null } } }
@@ -313,7 +313,7 @@ fun PliApp(host: PliHost, signals: HostSignals) {
             FullPanel(panel == Panel.ADD_APPS) { m ->
                 val (addScreen, page, cap) = homeMenu
                 AddAppsPanel(launcher, addScreen, m, onAdd = { ids ->
-                    launcher.edit("${ids.size} ajoutée" + if (ids.size > 1) "s" else "") { LayoutEdits.addMany(it, addScreen, ids, page * cap) }
+                    launcher.edit("${ids.size} added") { LayoutEdits.addMany(it, addScreen, ids, page * cap) }
                     panel = Panel.NONE
                 }, onClose = { panel = Panel.NONE })
             }
@@ -368,12 +368,12 @@ fun PliApp(host: PliHost, signals: HostSignals) {
                     onSelect = { selection.start(null) },
                     onAddApps = { panel = Panel.ADD_APPS },
                     onDeletePage = if (pageEmpty && launcher.layout.pages(menuScreen) > 1)
-                        ({ launcher.edit("Page supprimée") { LayoutEdits.deletePage(it, menuScreen, page, cap) } }) else null,
+                        ({ launcher.edit("Page deleted") { LayoutEdits.deletePage(it, menuScreen, page, cap) } }) else null,
                     locked = launcher.settings.lockLayout, onLock = { v -> launcher.updateSettings { it.copy(lockLayout = v) } },
-                    copyFrom = if (menuScreen == Screen.INNER) "l’écran externe" else "l’écran interne",
+                    copyFrom = if (menuScreen == Screen.INNER) "the cover screen" else "the inner screen",
                     onCopy = {
                         val other = if (menuScreen == Screen.INNER) Screen.COVER else Screen.INNER
-                        launcher.edit("Disposition copiée") { LayoutEdits.copyHome(it, other, menuScreen) }
+                        launcher.edit("Layout copied") { LayoutEdits.copyHome(it, other, menuScreen) }
                     })
             }
             folder?.let { (id, s) ->
@@ -388,7 +388,7 @@ fun PliApp(host: PliHost, signals: HostSignals) {
             }
             renameApp?.let { app -> RenameDialog(app, launcher) { renameApp = null } }
             FullPanel(iconApp != null) { m -> iconApp?.let { app -> IconPicker(app, launcher, host, m) { iconApp = null } } }
-            // "Annuler" for a few seconds after a change.
+            // "Undo" for a few seconds after a change.
             val undo = launcher.undo
             LaunchedEffect(launcher.undoStamp) { if (launcher.undo != null) { delay(6000); launcher.dismissUndo() } }
             if (undo != null && panel == Panel.NONE && menu == null) Box(Modifier.fillMaxSize()
@@ -396,7 +396,7 @@ fun PliApp(host: PliHost, signals: HostSignals) {
                 Row(Modifier.halo(Holo.Violet.copy(alpha = .2f), 12.dp).glass(RoundedCornerShape(50), .16f)
                     .padding(start = 18.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(undo.first, color = Holo.Ink, fontSize = 14.sp, modifier = Modifier.padding(end = 12.dp))
-                    PillButton("Annuler", highlighted = true) { launcher.undoLast() }
+                    PillButton("Undo", highlighted = true) { launcher.undoLast() }
                 }
             }
         }
@@ -441,11 +441,11 @@ private fun DefaultHomeBanner(onClick: () -> Unit, modifier: Modifier = Modifier
     Row(modifier.glass(RoundedCornerShape(50), .08f).clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Rounded.Home, null, tint = Holo.Violet)
-        Text("Faire de Fold Launcher Pro l’appli d’accueil", color = Holo.Ink, fontSize = 13.sp, modifier = Modifier.padding(start = 10.dp))
+        Text("Set Fold Launcher Pro as default home", color = Holo.Ink, fontSize = 13.sp, modifier = Modifier.padding(start = 10.dp))
     }
 }
 
-/** Swipe up: on an app icon, its favourite shortcut; elsewhere, all apps. */
+/** Swipe up: on an app icon, its favorite shortcut; elsewhere, all apps. */
 private fun swipeUp(drag: DragState, actions: HomeActions) {
     val id = drag.pressedId
     if (id != null && !HomeLayout.isFolder(id)) drag.onIconSwipeUp(id) else actions.drawer()
@@ -460,7 +460,7 @@ private fun HomePressScroll(signals: HostSignals, pager: PagerState, firstHome: 
     LaunchedEffect(signals.homePresses) { if (signals.homePresses > 0 && pager.currentPage != firstHome) pager.animateScrollToPage(firstHome) }
 }
 
-/** Cover screen: Discover and "Aujourd'hui" on the left, big clock, home pages, dock with the search orb. */
+/** Cover screen: Discover and "Today" on the left, big clock, home pages, dock with the search orb. */
 @Composable
 private fun CoverHome(host: PliHost, signals: HostSignals, today: TodayState, drag: DragState, actions: HomeActions,
     swipesOn: Boolean, showToday: Int) {
@@ -473,7 +473,7 @@ private fun CoverHome(host: PliHost, signals: HostSignals, today: TodayState, dr
     val pager = rememberPagerState(initialPage = lead) { lead + homePages + if (drag.active) 1 else 0 }
     HomePressScroll(signals, pager, lead)
     Column(Modifier.fillMaxSize().homeSwipes(swipesOn, { drag.source != null || pager.currentPage < lead }, { swipeUp(drag, actions) }, { swipeDown(host, actions, it) }, { up -> actions.gesture(if (up) launcher.settings.twoFingerUp else launcher.settings.twoFingerDown) })) {
-        // The clock sits above the home pages only: it slides away with them when the Actus page comes in.
+        // The clock sits above the home pages only: it slides away with them when the News page comes in.
         val density = LocalDensity.current
         var headerHeight by remember { mutableStateOf(206.dp) }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
@@ -507,7 +507,7 @@ private fun CoverHome(host: PliHost, signals: HostSignals, today: TodayState, dr
     }
 }
 
-/** Inner screen: "Aujourd'hui" on the left half, home on the right half (split on the hinge), wide dock below both. */
+/** Inner screen: "Today" on the left half, home on the right half (split on the hinge), wide dock below both. */
 @Composable
 private fun InnerHome(host: PliHost, signals: HostSignals, today: TodayState, drag: DragState, actions: HomeActions,
     swipesOn: Boolean, @Suppress("UNUSED_PARAMETER") showToday: Int) {
