@@ -114,14 +114,14 @@ private fun readGadgets(context: Context): List<Gadget> {
             val connected = runCatching { BluetoothDevice::class.java.getMethod("isConnected").invoke(device) as Boolean }.getOrDefault(false)
             if (!connected) return@mapNotNull null
             val level = runCatching { BluetoothDevice::class.java.getMethod("getBatteryLevel").invoke(device) as Int }.getOrDefault(-1)
-            if (level < 0) null else Gadget(device.alias ?: device.name ?: "Appareil", level)
+            if (level < 0) null else Gadget(device.alias ?: device.name ?: "Device", level)
         }.take(2)
     }.getOrDefault(emptyList())
 }
 
 private val cardShape = RoundedCornerShape(28.dp)
 
-/** The "Aujourd'hui" column: built-in cards and Android widgets, in the order the user chose. */
+/** The "Today" column: built-in cards and Android widgets, in the order the user chose. */
 @Composable
 fun TodayColumn(
     launcher: Launcher, widgets: Widgets, today: TodayState, editing: Boolean, modifier: Modifier,
@@ -133,10 +133,10 @@ fun TodayColumn(
     val nowPlaying by MediaWatcher.nowPlaying.collectAsState()
     Column(modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         if (showTitle) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            IridescentText("Aujourd’hui", 32.sp, Modifier.weight(1f), letterSpacing = (-.5).sp)
-            PillButton(if (editing) "Terminé" else "Modifier", highlighted = editing) { onEditing(!editing) }
+            IridescentText("Today", 32.sp, Modifier.weight(1f), letterSpacing = (-.5).sp)
+            PillButton(if (editing) "Done" else "Edit", highlighted = editing) { onEditing(!editing) }
         } else if (editing) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            PillButton("Terminé", highlighted = true) { onEditing(false) }
+            PillButton("Done", highlighted = true) { onEditing(false) }
         }
         val card: @Composable (TodayItem) -> Unit = { item ->
             when (item.kind) {
@@ -145,8 +145,8 @@ fun TodayColumn(
                 TodayItem.MEDIA -> {
                     val playing = nowPlaying
                     if (playing != null) NowPlayingCard(playing) { onOpenPackage(playing.packageName) }
-                    else if (!today.notificationsAllowed) HintCard("Lecture en cours", "Autorise l’accès aux notifications pour voir et piloter la musique.", "Autoriser", onNotificationAccess)
-                    else HintCard("Lecture en cours", "Rien en lecture pour l’instant.", null, null)
+                    else if (!today.notificationsAllowed) HintCard("Now playing", "Allow notification access to see and control your music.", "Allow", onNotificationAccess)
+                    else HintCard("Now playing", "Nothing playing right now.", null, null)
                 }
                 TodayItem.BATTERY -> BatteryCard(today, onPermission)
                 TodayItem.NOTE -> NoteCard(launcher)
@@ -160,7 +160,7 @@ fun TodayColumn(
         if (editing) items.forEachIndexed { index, item ->
             Column {
                 EditBar(
-                    title = cardTitle(item, widgets) + if (item.stack.isNotEmpty()) " · pile" else "",
+                    title = cardTitle(item, widgets) + if (item.stack.isNotEmpty()) " · stack" else "",
                     canUp = index > 0, canDown = index < items.lastIndex, resizable = item.isAndroid,
                     onUp = { launcher.update { it.copy(today = it.today.move(index, index - 1)) } },
                     onDown = { launcher.update { it.copy(today = it.today.move(index, index + 1)) } },
@@ -196,7 +196,7 @@ fun TodayColumn(
         if (editing || items.isEmpty()) Row(Modifier.fillMaxWidth().height(56.dp).glass(cardShape, .04f).clickable(onClick = onAddWidget),
             horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.Add, null, tint = Holo.Violet)
-            Text("Ajouter un widget", color = Holo.Ink, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
+            Text("Add a widget", color = Holo.Ink, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
         }
         Spacer(Modifier.height(8.dp))
     }
@@ -208,14 +208,14 @@ private fun <T> List<T>.move(from: Int, to: Int): List<T> {
 }
 
 fun cardTitle(item: TodayItem, widgets: Widgets): String = when (item.kind) {
-    TodayItem.WEATHER -> "Météo"
-    TodayItem.AGENDA -> "Agenda"
-    TodayItem.MEDIA -> "Lecture en cours"
-    TodayItem.BATTERY -> "Batterie"
-    TodayItem.NOTE -> "Note rapide"
-    TodayItem.TOGGLES -> "Raccourcis"
-    TodayItem.TASKS -> "Rappels"
-    TodayItem.SCREEN_TIME -> "Temps d’écran"
+    TodayItem.WEATHER -> "Weather"
+    TodayItem.AGENDA -> "Calendar"
+    TodayItem.MEDIA -> "Now playing"
+    TodayItem.BATTERY -> "Battery"
+    TodayItem.NOTE -> "Quick note"
+    TodayItem.TOGGLES -> "Quick toggles"
+    TodayItem.TASKS -> "Reminders"
+    TodayItem.SCREEN_TIME -> "Screen time"
     else -> widgets.info(item.widgetId)?.let(widgets::label) ?: "Widget"
 }
 
@@ -226,14 +226,14 @@ private fun EditBar(title: String, canUp: Boolean, canDown: Boolean, resizable: 
     Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, color = Holo.Muted, fontSize = 12.sp, modifier = Modifier.weight(1f).padding(start = 6.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (resizable) {
-            SmallRound(Icons.Rounded.Remove, "Réduire", onSmaller)
-            SmallRound(Icons.Rounded.Add, "Agrandir", onBigger)
+            SmallRound(Icons.Rounded.Remove, "Shrink", onSmaller)
+            SmallRound(Icons.Rounded.Add, "Enlarge", onBigger)
         }
-        if (stacked) SmallRound(Icons.Rounded.LinkOff, "Sortir de la pile", onUnstack)
-        else if (canStack) SmallRound(Icons.Rounded.Layers, "Empiler avec le suivant", onStack)
-        SmallRound(Icons.Rounded.KeyboardArrowUp, "Monter", onUp, canUp)
-        SmallRound(Icons.Rounded.KeyboardArrowDown, "Descendre", onDown, canDown)
-        SmallRound(Icons.Rounded.Close, "Retirer", onRemove, tint = Holo.Badge)
+        if (stacked) SmallRound(Icons.Rounded.LinkOff, "Remove from stack", onUnstack)
+        else if (canStack) SmallRound(Icons.Rounded.Layers, "Stack with next", onStack)
+        SmallRound(Icons.Rounded.KeyboardArrowUp, "Move up", onUp, canUp)
+        SmallRound(Icons.Rounded.KeyboardArrowDown, "Move down", onDown, canDown)
+        SmallRound(Icons.Rounded.Close, "Remove", onRemove, tint = Holo.Badge)
     }
 }
 
@@ -275,11 +275,11 @@ private fun HintCard(title: String, text: String, action: String?, onAction: (()
 private fun WeatherCard(weather: Weather?, onSettings: () -> Unit, onPermission: (String) -> Unit) {
     if (weather == null) {
         Column(Modifier.fillMaxWidth().glass(cardShape, .05f).padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            CardLabel("Météo")
-            Text("Choisis ta ville ou autorise la position pour voir la météo.", color = Holo.Soft, fontSize = 14.sp)
+            CardLabel("Weather")
+            Text("Choose your city or allow location to see the weather.", color = Holo.Soft, fontSize = 14.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PillButton("Choisir une ville", true, onSettings)
-                PillButton("Ma position") { onPermission(Manifest.permission.ACCESS_COARSE_LOCATION) }
+                PillButton("Choose a city", true, onSettings)
+                PillButton("My location") { onPermission(Manifest.permission.ACCESS_COARSE_LOCATION) }
             }
         }
         return
@@ -296,7 +296,7 @@ private fun WeatherCard(weather: Weather?, onSettings: () -> Unit, onPermission:
             val min = weather.hours.minOf { it.temperature }; val max = weather.hours.maxOf { it.temperature }
             weather.hours.forEach { h ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text("${h.hour}h", color = Holo.Muted, fontSize = 11.sp)
+                    Text("${h.hour}:00", color = Holo.Muted, fontSize = 11.sp)
                     Icon(skyIcon(h.sky), null, tint = Holo.Cyan, modifier = Modifier.size(16.dp))
                     val bar = 14.dp + 26.dp * (if (max == min) .5f else (h.temperature - min).toFloat() / (max - min))
                     Box(Modifier.width(7.dp).height(bar).background(Brush.verticalGradient(listOf(Holo.Cyan, Holo.Violet)), CircleShape))
@@ -313,20 +313,20 @@ private fun AgendaCard(today: TodayState, onPermission: (String) -> Unit) {
     val pattern = if (android.text.format.DateFormat.is24HourFormat(context)) "H:mm" else "h:mm a"
     Column(Modifier.fillMaxWidth().glass(cardShape, .05f).clickable { openCalendar(context) }.padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        CardLabel("Agenda")
+        CardLabel("Calendar")
         when {
             !today.calendarAllowed -> {
-                Text("Autorise l’agenda pour voir tes prochains rendez-vous.", color = Holo.Soft, fontSize = 14.sp)
-                PillButton("Autoriser", true) { onPermission(Manifest.permission.READ_CALENDAR) }
+                Text("Allow calendar access to see your upcoming events.", color = Holo.Soft, fontSize = 14.sp)
+                PillButton("Allow", true) { onPermission(Manifest.permission.READ_CALENDAR) }
             }
-            today.events.isEmpty() -> Text("Rien de prévu dans les prochaines 24 h.", color = Holo.Soft, fontSize = 14.sp)
+            today.events.isEmpty() -> Text("Nothing planned in the next 24 hours.", color = Holo.Soft, fontSize = 14.sp)
             else -> today.events.forEach { e ->
                 val color = if (e.color != 0) Color(e.color or 0xFF000000.toInt()) else Holo.Cyan
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(10.dp).halo(color.copy(alpha = .6f), 5.dp).background(color, CircleShape))
                     Text(e.title, color = Holo.Ink, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f).padding(horizontal = 12.dp))
-                    Text(if (e.allDay) "Journée" else e.start.format(DateTimeFormatter.ofPattern(pattern)), color = Holo.Muted, fontSize = 12.sp)
+                    Text(if (e.allDay) "All day" else e.start.format(DateTimeFormatter.ofPattern(pattern)), color = Holo.Muted, fontSize = 12.sp)
                 }
             }
         }
@@ -356,13 +356,13 @@ private fun BatteryCard(today: TodayState, onPermission: (String) -> Unit) {
     val bluetoothAllowed = context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
     Column(Modifier.fillMaxWidth().glass(cardShape, .05f).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.weight(1f)) { CardLabel("Batterie") }
-            if (today.battery?.charging == true) Text("En charge", color = Holo.Mint, fontSize = 12.sp)
+            Box(Modifier.weight(1f)) { CardLabel("Battery") }
+            if (today.battery?.charging == true) Text("Charging", color = Holo.Mint, fontSize = 12.sp)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
-            today.battery?.let { BatteryRing(it.level, "Téléphone") }
+            today.battery?.let { BatteryRing(it.level, "Phone") }
             today.gadgets.forEach { BatteryRing(it.level, it.name) }
-            if (!bluetoothAllowed) Text("Écouteurs et montre", color = Holo.Cyan, fontSize = 12.sp,
+            if (!bluetoothAllowed) Text("Earbuds and watch", color = Holo.Cyan, fontSize = 12.sp,
                 modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { onPermission(Manifest.permission.BLUETOOTH_CONNECT) }.padding(6.dp))
         }
     }
@@ -378,7 +378,7 @@ private fun NoteCard(launcher: Launcher) {
         BasicTextField(text, { text = it; launcher.store.note = it }, Modifier.fillMaxWidth().heightIn(min = 44.dp),
             textStyle = TextStyle(color = Holo.Ink, fontSize = 15.sp, lineHeight = 21.sp), cursorBrush = SolidColor(Holo.Violet),
             decorationBox = { inner ->
-                if (text.isEmpty()) Text("Écris une note…", color = Holo.Soft.copy(alpha = .6f), fontSize = 15.sp)
+                if (text.isEmpty()) Text("Write a note…", color = Holo.Soft.copy(alpha = .6f), fontSize = 15.sp)
                 inner()
             })
     }
@@ -391,7 +391,7 @@ private fun AndroidWidgetCard(widgets: Widgets, item: TodayItem) {
         val width = maxWidth
         LaunchedEffect(item.widgetId, width, height) { widgets.resize(item.widgetId, width.value, height.value) }
         AndroidView(factory = { ctx -> widgets.view(ctx, item.widgetId) ?: FrameLayout(ctx) }, modifier = Modifier.fillMaxSize())
-        if (widgets.info(item.widgetId) == null) Text("Widget indisponible", color = Holo.Muted, fontSize = 13.sp, modifier = Modifier.align(Alignment.Center))
+        if (widgets.info(item.widgetId) == null) Text("Widget unavailable", color = Holo.Muted, fontSize = 13.sp, modifier = Modifier.align(Alignment.Center))
     }
 }
 
@@ -405,12 +405,12 @@ fun WidgetPicker(launcher: Launcher, widgets: Widgets, modifier: Modifier, onPic
     Column(modifier) {
         Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             IridescentText("Widgets", 30.sp, Modifier.weight(1f), letterSpacing = (-.5).sp)
-            PillButton("Fermer", onClick = onClose)
+            PillButton("Close", onClick = onClose)
         }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (builtIns.isNotEmpty()) item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CardLabel("Widgets Fold Launcher Pro")
+                    CardLabel("Fold Launcher Pro widgets")
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         builtIns.forEach { kind ->
                             PillButton(cardTitle(TodayItem(kind, kind), widgets)) { onPickBuiltIn(kind) }
