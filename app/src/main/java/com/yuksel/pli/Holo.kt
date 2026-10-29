@@ -68,7 +68,7 @@ fun Modifier.glass(shape: Shape, fill: Float = .06f, edge: Boolean = true): Modi
     clip(shape).background(Color.White.copy(alpha = fill), shape)
         .then(if (edge) Modifier.border(1.dp, Holo.edgeBrush, shape) else Modifier)
 
-/** A soft coloured halo behind an element. */
+/** A soft colored halo behind an element. */
 fun Modifier.halo(color: Color, radius: Dp = 28.dp): Modifier = drawBehind {
     val r = size.minDimension / 2f + radius.toPx()
     drawCircle(Brush.radialGradient(listOf(color, Color.Transparent), center = center, radius = r), radius = r, center = center)
@@ -105,7 +105,7 @@ fun rememberTilt(enabled: Boolean): Offset {
     return smooth
 }
 
-/** The black holographic backdrop with three drifting colour halos. Over the phone wallpaper it only darkens. */
+/** The black holographic backdrop with three drifting color halos. Over the phone wallpaper it only darkens. */
 @Composable
 fun HoloBackground(phoneWallpaper: Boolean, parallax: Boolean, modifier: Modifier = Modifier.fillMaxSize()) {
     val tilt = rememberTilt(parallax)
@@ -129,9 +129,9 @@ val LocalBubbles = staticCompositionLocalOf { true }
 val LocalIconShape = staticCompositionLocalOf { "circle" }
 val LocalBadges = staticCompositionLocalOf<Map<String, Int>> { emptyMap() }
 
-/** Icon shapes offered in the settings: key to French name. */
-val ICON_SHAPES = listOf("circle" to "Rond", "squircle" to "Squircle", "rounded" to "Arrondi", "square" to "Carré",
-    "teardrop" to "Goutte", "leaf" to "Feuille", "original" to "D’origine")
+/** Icon shapes offered in the settings: key to display name. */
+val ICON_SHAPES = listOf("circle" to "Circle", "squircle" to "Squircle", "rounded" to "Rounded", "square" to "Square",
+    "teardrop" to "Teardrop", "leaf" to "Leaf", "original" to "Original")
 
 fun iconShape(name: String): Shape = when (name) {
     "squircle" -> RoundedCornerShape(36)
