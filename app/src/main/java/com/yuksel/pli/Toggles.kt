@@ -71,7 +71,7 @@ private fun torchCamera(context: Context): String? = runCatching {
 }.getOrNull()
 
 /**
- * "Raccourcis" card: quick switches. Android lets an app switch the torch, the ringer, Do not disturb
+ * "Quick toggles" card: quick switches. Android lets an app switch the torch, the ringer, Do not disturb
  * and auto-rotation itself; for Wi-Fi, mobile data and NFC it can only open the system's quick panel.
  */
 @Composable
@@ -103,16 +103,16 @@ fun TogglesCard(onPermission: (String) -> Unit) {
     }
     val items = listOf(
         Toggle("Wi-Fi", Icons.Rounded.Wifi, wifi) { start(context, Intent(Settings.Panel.ACTION_WIFI)) },
-        Toggle("Données", Icons.Rounded.SignalCellularAlt, null) { start(context, Intent(Settings.Panel.ACTION_INTERNET_CONNECTIVITY)) },
+        Toggle("Data", Icons.Rounded.SignalCellularAlt, null) { start(context, Intent(Settings.Panel.ACTION_INTERNET_CONNECTIVITY)) },
         Toggle("Bluetooth", Icons.Rounded.Bluetooth, bluetooth) {
             if (bluetooth) start(context, Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
             else if (context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) onPermission(Manifest.permission.BLUETOOTH_CONNECT)
             else if (!start(context, Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))) start(context, Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
         },
-        Toggle("Lampe", Icons.Rounded.FlashlightOn, torch) {
+        Toggle("Flashlight", Icons.Rounded.FlashlightOn, torch) {
             torchId?.let { id -> runCatching { cameras.setTorchMode(id, !torch) } }
         },
-        Toggle(when (ringer) { AudioManager.RINGER_MODE_VIBRATE -> "Vibreur"; AudioManager.RINGER_MODE_SILENT -> "Silencieux"; else -> "Sonnerie" },
+        Toggle(when (ringer) { AudioManager.RINGER_MODE_VIBRATE -> "Vibrate"; AudioManager.RINGER_MODE_SILENT -> "Silent"; else -> "Ring" },
             when (ringer) { AudioManager.RINGER_MODE_VIBRATE -> Icons.Rounded.Vibration; AudioManager.RINGER_MODE_SILENT -> Icons.Rounded.NotificationsOff
                 else -> Icons.Rounded.NotificationsActive }, ringer != AudioManager.RINGER_MODE_NORMAL) {
             val next = when (ringer) { AudioManager.RINGER_MODE_NORMAL -> AudioManager.RINGER_MODE_VIBRATE
@@ -120,11 +120,11 @@ fun TogglesCard(onPermission: (String) -> Unit) {
             if (runCatching { audio.ringerMode = next }.isFailure && !needPolicy()) Unit
             tick++
         },
-        Toggle("Ne pas déranger", Icons.Rounded.DoNotDisturbOn, dnd) {
+        Toggle("Do not disturb", Icons.Rounded.DoNotDisturbOn, dnd) {
             if (!needPolicy()) notifications.setInterruptionFilter(if (dnd) NotificationManager.INTERRUPTION_FILTER_ALL else NotificationManager.INTERRUPTION_FILTER_PRIORITY)
             tick++
         },
-        Toggle("Rotation", Icons.Rounded.ScreenRotation, rotation) {
+        Toggle("Rotate", Icons.Rounded.ScreenRotation, rotation) {
             if (Settings.System.canWrite(context)) Settings.System.putInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, if (rotation) 0 else 1)
             else start(context, Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:" + context.packageName)))
             tick++
@@ -132,7 +132,7 @@ fun TogglesCard(onPermission: (String) -> Unit) {
         Toggle("NFC", Icons.Rounded.Nfc, null) { start(context, Intent(Settings.Panel.ACTION_NFC)) },
     )
     Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(28.dp), .05f).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("RACCOURCIS", color = Holo.Muted, fontSize = 11.sp, letterSpacing = 2.5.sp)
+        Text("QUICK TOGGLES", color = Holo.Muted, fontSize = 11.sp, letterSpacing = 2.5.sp)
         items.chunked(4).forEach { line ->
             Row(Modifier.fillMaxWidth()) {
                 line.forEach { t -> Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { ToggleButton(t) } }
@@ -148,7 +148,7 @@ private class Toggle(val label: String, val icon: ImageVector, val on: Boolean?,
 private fun ToggleButton(t: Toggle) {
     val on = t.on == true
     Column(Modifier.clip(RoundedCornerShape(18.dp)).clickable(onClick = t.action)
-        .semantics { contentDescription = t.label; if (t.on != null) stateDescription = if (on) "activé" else "désactivé" }
+        .semantics { contentDescription = t.label; if (t.on != null) stateDescription = if (on) "on" else "off" }
         .padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.size(52.dp).then(
             if (on) Modifier.halo(Holo.Violet.copy(alpha = .35f), 8.dp).background(Brush.linearGradient(Holo.Iridescent), CircleShape)
