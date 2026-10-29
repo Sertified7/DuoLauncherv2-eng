@@ -74,22 +74,25 @@ import java.time.format.DateTimeFormatter
 
 data class Article(val title: String, val source: String, val link: String, val image: String?, val summary: String, val published: Instant?)
 
-/** A tab: Google Actualités for the topic, plus French newsrooms whose feeds carry photos. */
+/** A tab: Google News for the topic, plus English-language newsrooms whose feeds carry photos. */
 class NewsTopic(val label: String, val feeds: List<Pair<String, String>>)
 
-private fun google(section: String?) = "Google Actualités" to (if (section == null) "https://news.google.com/rss?hl=fr&gl=FR&ceid=FR:fr"
-    else "https://news.google.com/rss/headlines/section/topic/$section?hl=fr&gl=FR&ceid=FR:fr")
+private const val GOOGLE_NEWS = "Google News"
 
+private fun google(section: String?) = GOOGLE_NEWS to (if (section == null) "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en"
+    else "https://news.google.com/rss/headlines/section/topic/$section?hl=en-US&gl=US&ceid=US:en")
+
+// Feeds that don't load are simply skipped, so a wrong address here is harmless.
 val NEWS_TOPICS = listOf(
-    NewsTopic("À la une", listOf(google(null), "Le Monde" to "https://www.lemonde.fr/rss/une.xml", "franceinfo" to "https://www.francetvinfo.fr/titres.rss")),
-    NewsTopic("France", listOf(google("NATION"), "Le Monde" to "https://www.lemonde.fr/politique/rss_full.xml", "franceinfo" to "https://www.francetvinfo.fr/politique.rss")),
-    NewsTopic("Monde", listOf(google("WORLD"), "Le Monde" to "https://www.lemonde.fr/international/rss_full.xml", "franceinfo" to "https://www.francetvinfo.fr/monde.rss")),
-    NewsTopic("Économie", listOf(google("BUSINESS"), "Le Monde" to "https://www.lemonde.fr/economie/rss_full.xml", "franceinfo" to "https://www.francetvinfo.fr/economie.rss")),
-    NewsTopic("Tech", listOf(google("TECHNOLOGY"), "Le Monde" to "https://www.lemonde.fr/pixels/rss_full.xml")),
-    NewsTopic("Sport", listOf(google("SPORTS"), "Le Monde" to "https://www.lemonde.fr/sport/rss_full.xml", "franceinfo" to "https://www.francetvinfo.fr/sports.rss")),
-    NewsTopic("Culture", listOf(google("ENTERTAINMENT"), "Le Monde" to "https://www.lemonde.fr/culture/rss_full.xml", "franceinfo" to "https://www.francetvinfo.fr/culture.rss")),
-    NewsTopic("Sciences", listOf(google("SCIENCE"), "Le Monde" to "https://www.lemonde.fr/sciences/rss_full.xml")),
-    NewsTopic("Santé", listOf(google("HEALTH"), "franceinfo" to "https://www.francetvinfo.fr/sante.rss")),
+    NewsTopic("Top stories", listOf(google(null), "BBC News" to "https://feeds.bbci.co.uk/news/rss.xml", "NPR" to "https://feeds.npr.org/1001/rss.xml")),
+    NewsTopic("U.S.", listOf(google("NATION"), "BBC News" to "https://feeds.bbci.co.uk/news/politics/rss.xml", "NPR" to "https://feeds.npr.org/1003/rss.xml")),
+    NewsTopic("World", listOf(google("WORLD"), "BBC News" to "https://feeds.bbci.co.uk/news/world/rss.xml", "NPR" to "https://feeds.npr.org/1004/rss.xml")),
+    NewsTopic("Business", listOf(google("BUSINESS"), "BBC News" to "https://feeds.bbci.co.uk/news/business/rss.xml", "NPR" to "https://feeds.npr.org/1006/rss.xml")),
+    NewsTopic("Tech", listOf(google("TECHNOLOGY"), "BBC News" to "https://feeds.bbci.co.uk/news/technology/rss.xml", "NPR" to "https://feeds.npr.org/1019/rss.xml")),
+    NewsTopic("Sports", listOf(google("SPORTS"), "BBC Sport" to "https://feeds.bbci.co.uk/sport/rss.xml")),
+    NewsTopic("Entertainment", listOf(google("ENTERTAINMENT"), "BBC News" to "https://feeds.bbci.co.uk/news/entertainment_and_arts/rss.xml", "NPR" to "https://feeds.npr.org/1008/rss.xml")),
+    NewsTopic("Science", listOf(google("SCIENCE"), "BBC News" to "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml", "NPR" to "https://feeds.npr.org/1007/rss.xml")),
+    NewsTopic("Health", listOf(google("HEALTH"), "BBC News" to "https://feeds.bbci.co.uk/news/health/rss.xml", "NPR" to "https://feeds.npr.org/1128/rss.xml")),
 )
 
 private fun open(url: String): HttpURLConnection = (URL(url).openConnection() as HttpURLConnection).apply {
@@ -134,9 +137,9 @@ private fun readFeed(sourceName: String, url: String): List<Article> = runCatchi
                 XmlPullParser.END_TAG -> if (parser.name == "item" && inItem) {
                     inItem = false
                     var clean = stripHtml(title)
-                    // Google Actualités ends titles with " - Source".
+                    // Google News ends titles with " - Source".
                     if (source != sourceName && clean.endsWith(" - $source")) clean = clean.removeSuffix(" - $source")
-                    val text = if (sourceName == "Google Actualités") "" else stripHtml(summary)
+                    val text = if (sourceName == GOOGLE_NEWS) "" else stripHtml(summary)
                     if (clean.isNotBlank() && link.isNotBlank()) out += Article(clean, source, link.trim(), image, text.take(220), parseDate(date))
                 }
             }
@@ -190,10 +193,10 @@ fun ago(instant: Instant?): String {
     instant ?: return ""
     val minutes = Duration.between(instant, Instant.now()).toMinutes().coerceAtLeast(0)
     return when {
-        minutes < 1 -> "à l’instant"
-        minutes < 60 -> "il y a $minutes min"
-        minutes < 24 * 60 -> "il y a ${minutes / 60} h"
-        else -> "il y a ${minutes / (24 * 60)} j"
+        minutes < 1 -> "just now"
+        minutes < 60 -> "$minutes min ago"
+        minutes < 24 * 60 -> "${minutes / 60}h ago"
+        else -> "${minutes / (24 * 60)}d ago"
     }
 }
 
@@ -209,9 +212,9 @@ fun NewsPage(modifier: Modifier, onRead: (Article) -> Unit) {
     }
     Column(modifier) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            IridescentText("Actus", 32.sp, Modifier.weight(1f), letterSpacing = (-.5).sp)
+            IridescentText("News", 32.sp, Modifier.weight(1f), letterSpacing = (-.5).sp)
             IconButton(onClick = { refresh++ }, Modifier.size(40.dp).glass(CircleShape, .06f)) {
-                Icon(Icons.Rounded.Refresh, "Actualiser", tint = Holo.Ink, modifier = Modifier.size(20.dp))
+                Icon(Icons.Rounded.Refresh, "Refresh", tint = Holo.Ink, modifier = Modifier.size(20.dp))
             }
         }
         Row(Modifier.padding(vertical = 12.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -222,7 +225,7 @@ fun NewsPage(modifier: Modifier, onRead: (Article) -> Unit) {
             articles == null -> Box(Modifier.fillMaxWidth().padding(top = 60.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = Holo.Violet, strokeWidth = 2.dp)
             }
-            articles.isEmpty() -> Text("Pas d’actualités pour l’instant. Vérifie ta connexion puis actualise.", color = Holo.Muted, fontSize = 14.sp,
+            articles.isEmpty() -> Text("No news right now. Check your connection, then refresh.", color = Holo.Muted, fontSize = 14.sp,
                 modifier = Modifier.padding(top = 30.dp))
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(articles, key = { it.link }) { a -> ArticleCard(a, onRead) }
@@ -281,8 +284,8 @@ fun ArticleReader(article: Article, modifier: Modifier, onClose: () -> Unit) {
             IconButton(onClick = {
                 runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(web?.url ?: article.link))
                     .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
-            }, Modifier.size(40.dp)) { Icon(Icons.Rounded.OpenInBrowser, "Ouvrir dans le navigateur", tint = Holo.Ink) }
-            IconButton(onClick = onClose, Modifier.padding(start = 4.dp).size(40.dp).glass(CircleShape, .08f)) { Icon(Icons.Rounded.Close, "Fermer", tint = Holo.Ink) }
+            }, Modifier.size(40.dp)) { Icon(Icons.Rounded.OpenInBrowser, "Open in browser", tint = Holo.Ink) }
+            IconButton(onClick = onClose, Modifier.padding(start = 4.dp).size(40.dp).glass(CircleShape, .08f)) { Icon(Icons.Rounded.Close, "Close", tint = Holo.Ink) }
         }
         Box(Modifier.fillMaxSize().clip(RoundedCornerShape(24.dp)).background(Color.White)) {
             AndroidView(factory = { ctx ->
