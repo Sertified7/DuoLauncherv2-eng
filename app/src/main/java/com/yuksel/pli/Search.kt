@@ -102,10 +102,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.Locale
 
 // ---------- Calculator ----------
 
-/** Evaluates simple arithmetic typed in search ("12*8", "(3,5+2)/4", "15 %"). Null if it isn't a calculation. */
+/** Evaluates simple arithmetic typed in search ("12*8", "(3.5+2)/4", "15 %"). Null if it isn't a calculation. */
 fun evaluateCalculation(input: String): String? {
     val text = input.replace(" ", "").replace(',', '.').replace('×', '*').replace('x', '*').replace('÷', '/')
     if (text.isEmpty() || text.none { it in "+-*/%" } || text.any { it !in "0123456789.+-*/%()" }) return null
@@ -135,7 +136,7 @@ fun evaluateCalculation(input: String): String? {
     val result = runCatching { expr().also { require(pos == text.length) } }.getOrNull() ?: return null
     if (result.isNaN() || result.isInfinite()) return null
     return if (result == kotlin.math.floor(result) && kotlin.math.abs(result) < 1e15) result.toLong().toString()
-    else "%.6f".format(java.util.Locale.FRANCE, result).trimEnd('0').trimEnd(',')
+    else "%.6f".format(Locale.US, result).trimEnd('0').trimEnd('.')
 }
 
 // ---------- Settings & contacts ----------
@@ -143,18 +144,18 @@ fun evaluateCalculation(input: String): String? {
 private data class SettingShortcut(val label: String, val keywords: String, val action: String, val icon: ImageVector)
 
 private val settingShortcuts = listOf(
-    SettingShortcut("Wi-Fi", "wifi internet reseau", Settings.ACTION_WIFI_SETTINGS, Icons.Rounded.Wifi),
-    SettingShortcut("Bluetooth", "bluetooth casque ecouteurs montre", Settings.ACTION_BLUETOOTH_SETTINGS, Icons.Rounded.Bluetooth),
-    SettingShortcut("Affichage", "ecran luminosite affichage mode sombre", Settings.ACTION_DISPLAY_SETTINGS, Icons.Rounded.LightMode),
-    SettingShortcut("Son et vibration", "son volume sonnerie vibration", Settings.ACTION_SOUND_SETTINGS, Icons.Rounded.VolumeUp),
-    SettingShortcut("Batterie", "batterie energie economie", Intent.ACTION_POWER_USAGE_SUMMARY, Icons.Rounded.BatteryFull),
-    SettingShortcut("Notifications", "notifications alertes", Settings.ACTION_APP_NOTIFICATION_SETTINGS, Icons.Rounded.Notifications),
-    SettingShortcut("Applications", "applications applis apps", Settings.ACTION_APPLICATION_SETTINGS, Icons.Rounded.Apps),
-    SettingShortcut("Stockage", "stockage memoire espace", Settings.ACTION_INTERNAL_STORAGE_SETTINGS, Icons.Rounded.Storage),
-    SettingShortcut("Localisation", "position gps localisation", Settings.ACTION_LOCATION_SOURCE_SETTINGS, Icons.Rounded.LocationOn),
-    SettingShortcut("Mode avion", "avion vol", Settings.ACTION_AIRPLANE_MODE_SETTINGS, Icons.Rounded.AirplanemodeActive),
-    SettingShortcut("Données mobiles", "donnees mobiles 4g 5g reseau sim", Settings.ACTION_DATA_ROAMING_SETTINGS, Icons.Rounded.SignalCellularAlt),
-    SettingShortcut("Paramètres", "parametres reglages", Settings.ACTION_SETTINGS, Icons.Rounded.Settings),
+    SettingShortcut("Wi-Fi", "wifi internet network", Settings.ACTION_WIFI_SETTINGS, Icons.Rounded.Wifi),
+    SettingShortcut("Bluetooth", "bluetooth headphones earbuds watch", Settings.ACTION_BLUETOOTH_SETTINGS, Icons.Rounded.Bluetooth),
+    SettingShortcut("Display", "screen brightness display dark mode", Settings.ACTION_DISPLAY_SETTINGS, Icons.Rounded.LightMode),
+    SettingShortcut("Sound & vibration", "sound volume ringtone vibration", Settings.ACTION_SOUND_SETTINGS, Icons.Rounded.VolumeUp),
+    SettingShortcut("Battery", "battery power saver energy", Intent.ACTION_POWER_USAGE_SUMMARY, Icons.Rounded.BatteryFull),
+    SettingShortcut("Notifications", "notifications alerts", Settings.ACTION_APP_NOTIFICATION_SETTINGS, Icons.Rounded.Notifications),
+    SettingShortcut("Apps", "applications apps", Settings.ACTION_APPLICATION_SETTINGS, Icons.Rounded.Apps),
+    SettingShortcut("Storage", "storage memory space", Settings.ACTION_INTERNAL_STORAGE_SETTINGS, Icons.Rounded.Storage),
+    SettingShortcut("Location", "location gps position", Settings.ACTION_LOCATION_SOURCE_SETTINGS, Icons.Rounded.LocationOn),
+    SettingShortcut("Airplane mode", "airplane flight mode", Settings.ACTION_AIRPLANE_MODE_SETTINGS, Icons.Rounded.AirplanemodeActive),
+    SettingShortcut("Mobile data", "mobile data cellular 4g 5g network sim", Settings.ACTION_DATA_ROAMING_SETTINGS, Icons.Rounded.SignalCellularAlt),
+    SettingShortcut("Settings", "settings preferences", Settings.ACTION_SETTINGS, Icons.Rounded.Settings),
 )
 
 private data class Contact(val name: String, val lookup: Uri)
@@ -212,7 +213,7 @@ fun GlassField(value: String, onValue: (String) -> Unit, placeholder: String, fo
 
 @Composable
 private fun SectionLabel(text: String) {
-    Text(text.uppercase(), color = Holo.Muted, fontSize = 11.sp, letterSpacing = 2.5.sp, modifier = Modifier.padding(top = 6.dp, bottom = 8.dp))
+    Text(text.uppercase(Locale.US), color = Holo.Muted, fontSize = 11.sp, letterSpacing = 2.5.sp, modifier = Modifier.padding(top = 6.dp, bottom = 8.dp))
 }
 
 @Composable
@@ -246,7 +247,7 @@ fun SearchPanel(launcher: Launcher, modifier: Modifier, onOpen: (AppInfo, Rect?)
     onClose: () -> Unit, onRequestContacts: () -> Unit, onPliSetting: () -> Unit = {}) {
     val context = LocalContext.current
     var query by rememberSaveable { mutableStateOf("") }
-    // App shortcuts ("Nouveau message", "Itinéraire maison"…), read once when search opens.
+    // App shortcuts ("New message", "Navigate home"…), read once when search opens.
     val allShortcuts by produceState(emptyList<Pair<AppInfo, AppShortcut>>(), launcher.byId) {
         value = withContext(Dispatchers.IO) { loadAllShortcuts(context, launcher.visibleApps) }
     }
@@ -281,8 +282,8 @@ fun SearchPanel(launcher: Launcher, modifier: Modifier, onOpen: (AppInfo, Rect?)
     val list = rememberLazyListState()
     Column(modifier.swipeDownToClose({ list.firstVisibleItemIndex == 0 && list.firstVisibleItemScrollOffset == 0 }) { keyboard?.hide(); onClose() }) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            GlassField(query, { query = it }, "Rechercher", focus, Modifier.weight(1f), onDone = ::launchFirst)
-            Text("Annuler", color = Holo.Violet, fontSize = 14.sp, modifier = Modifier.padding(start = 12.dp).clip(RoundedCornerShape(12.dp))
+            GlassField(query, { query = it }, "Search", focus, Modifier.weight(1f), onDone = ::launchFirst)
+            Text("Cancel", color = Holo.Violet, fontSize = 14.sp, modifier = Modifier.padding(start = 12.dp).clip(RoundedCornerShape(12.dp))
                 .clickable(onClick = onClose).padding(8.dp))
         }
         Spacer(Modifier.height(16.dp))
@@ -293,18 +294,18 @@ fun SearchPanel(launcher: Launcher, modifier: Modifier, onOpen: (AppInfo, Rect?)
                     .border(1.dp, Color.White.copy(alpha = .22f), RoundedCornerShape(28.dp)).padding(horizontal = 20.dp, vertical = 16.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("CALCUL", color = Holo.Soft, fontSize = 11.sp, letterSpacing = 2.5.sp)
+                        Text("CALCULATION", color = Holo.Soft, fontSize = 11.sp, letterSpacing = 2.5.sp)
                         IridescentText("= $calc", 40.sp, letterSpacing = 0.sp)
                     }
-                    PillButton("Copier") {
-                        context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("Résultat", calc))
+                    PillButton("Copy") {
+                        context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("Result", calc))
                     }
                 }
             }
             val shown = if (query.isBlank()) suggestions else matches
             if (shown.isNotEmpty()) item {
                 Column {
-                    SectionLabel(if (query.isBlank()) "Suggestions" else "Applis")
+                    SectionLabel(if (query.isBlank()) "Suggestions" else "Apps")
                     shown.chunked(4).forEach { row ->
                         Row(Modifier.fillMaxWidth()) {
                             row.forEach { app -> Box(Modifier.weight(1f)) { AppChoice(app, 56.dp, { a, r -> openFromSearch(a, r) }, onHold) } }
@@ -317,7 +318,7 @@ fun SearchPanel(launcher: Launcher, modifier: Modifier, onOpen: (AppInfo, Rect?)
                 if (contacts.isNotEmpty() || !contactsAllowed) item {
                     Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(24.dp), .05f).padding(6.dp)) {
                         SectionLabel("  Contacts")
-                        if (!contactsAllowed) ResultRow(Icons.Rounded.Person, "Chercher aussi dans les contacts", "Autoriser l’accès", onRequestContacts)
+                        if (!contactsAllowed) ResultRow(Icons.Rounded.Person, "Search contacts too", "Allow access", onRequestContacts)
                         contacts.forEach { c ->
                             ResultRow(Icons.Rounded.Person, c.name, "Contact") { startSafely(context, Intent(Intent.ACTION_VIEW, c.lookup)); onClose() }
                         }
@@ -325,7 +326,7 @@ fun SearchPanel(launcher: Launcher, modifier: Modifier, onOpen: (AppInfo, Rect?)
                 }
                 if (shortcutHits.isNotEmpty()) item {
                     Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(24.dp), .05f).padding(6.dp)) {
-                        SectionLabel("  Raccourcis")
+                        SectionLabel("  Shortcuts")
                         shortcutHits.forEach { (app, sc) ->
                             Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(18.dp))
                                 .clickable { startAppShortcut(context, sc); onClose() }.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -343,27 +344,27 @@ fun SearchPanel(launcher: Launcher, modifier: Modifier, onOpen: (AppInfo, Rect?)
                 }
                 if (noteHit) item {
                     Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(24.dp), .05f).padding(6.dp)) {
-                        SectionLabel("  Note Fold Launcher Pro")
-                        ResultRow(Icons.Rounded.StickyNote2, note.lines().first().take(60), "Ta note rapide (page Aujourd’hui)") { onClose() }
+                        SectionLabel("  Fold Launcher Pro Note")
+                        ResultRow(Icons.Rounded.StickyNote2, note.lines().first().take(60), "Your quick note (Today page)") { onClose() }
                     }
                 }
                 if (pliHits.isNotEmpty()) item {
                     Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(24.dp), .05f).padding(6.dp)) {
-                        SectionLabel("  Réglages de Fold Launcher Pro")
+                        SectionLabel("  Fold Launcher Pro Settings")
                         pliHits.forEach { (label, _) -> ResultRow(Icons.Rounded.Tune, label, "Fold Launcher Pro") { onPliSetting() } }
                     }
                 }
                 if (settings.isNotEmpty()) item {
                     Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(24.dp), .05f).padding(6.dp)) {
-                        SectionLabel("  Réglages")
-                        settings.forEach { s -> ResultRow(s.icon, s.label, "Réglages") { startSafely(context, Intent(s.action)); onClose() } }
+                        SectionLabel("  Settings")
+                        settings.forEach { s -> ResultRow(s.icon, s.label, "Settings") { startSafely(context, Intent(s.action)); onClose() } }
                     }
                 }
                 item {
                     Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(24.dp), .05f).padding(6.dp)) {
                         SectionLabel("  Web")
-                        ResultRow(Icons.Rounded.Language, "Rechercher « ${query.trim()} »", "Sur le web") { webSearch(context, query); onClose() }
-                        ResultRow(Icons.Rounded.Shop, "Chercher une appli « ${query.trim()} »", "Play Store") {
+                        ResultRow(Icons.Rounded.Language, "Search \"${query.trim()}\"", "On the web") { webSearch(context, query); onClose() }
+                        ResultRow(Icons.Rounded.Shop, "Search for app \"${query.trim()}\"", "Play Store") {
                             startSafely(context, Intent(Intent.ACTION_VIEW, Uri.parse("market://search?q=" + Uri.encode(query)))); onClose()
                         }
                     }
@@ -383,12 +384,12 @@ fun AppDrawer(launcher: Launcher, modifier: Modifier, onOpen: (AppInfo, Rect) ->
     val grid = rememberLazyGridState()
     Column(modifier.swipeDownToClose({ grid.firstVisibleItemIndex == 0 && grid.firstVisibleItemScrollOffset == 0 }, onClose)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IridescentText("Applis", 30.sp, Modifier.weight(1f), letterSpacing = (-.5).sp)
+            IridescentText("Apps", 30.sp, Modifier.weight(1f), letterSpacing = (-.5).sp)
             Text("${apps.size}", color = Holo.Muted, fontSize = 13.sp, modifier = Modifier.padding(end = 12.dp))
-            PillButton("Fermer", onClick = onClose)
+            PillButton("Close", onClick = onClose)
         }
         Spacer(Modifier.height(12.dp))
-        GlassField(filter, { filter = it }, "Filtrer les applis", null, Modifier.fillMaxWidth(),
+        GlassField(filter, { filter = it }, "Filter apps", null, Modifier.fillMaxWidth(),
             onDone = { shown.firstOrNull()?.let { onOpen(it, Rect.Zero) } })
         Spacer(Modifier.height(12.dp))
         LazyVerticalGrid(GridCells.Adaptive(86.dp), Modifier.fillMaxSize(), grid) {
@@ -452,12 +453,12 @@ fun AddAppsPanel(launcher: Launcher, screen: Screen, modifier: Modifier, onAdd: 
     val grid = rememberLazyGridState()
     Column(modifier.swipeDownToClose({ grid.firstVisibleItemIndex == 0 && grid.firstVisibleItemScrollOffset == 0 }, onClose)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IridescentText("Ajouter à l’accueil", 26.sp, Modifier.weight(1f), letterSpacing = (-.3).sp)
-            PillButton("Fermer", onClick = onClose)
+            IridescentText("Add to Home", 26.sp, Modifier.weight(1f), letterSpacing = (-.3).sp)
+            PillButton("Close", onClick = onClose)
         }
-        Text(if (screen == Screen.INNER) "Écran interne" else "Écran externe", color = Holo.Muted, fontSize = 12.sp)
+        Text(if (screen == Screen.INNER) "Inner screen" else "Cover screen", color = Holo.Muted, fontSize = 12.sp)
         Spacer(Modifier.height(12.dp))
-        GlassField(filter, { filter = it }, "Filtrer les applis", null, Modifier.fillMaxWidth())
+        GlassField(filter, { filter = it }, "Filter apps", null, Modifier.fillMaxWidth())
         Spacer(Modifier.height(12.dp))
         LazyVerticalGrid(GridCells.Adaptive(86.dp), Modifier.weight(1f).fillMaxWidth(), grid) {
             items(shown, key = { it.id }) { app ->
@@ -475,10 +476,10 @@ fun AddAppsPanel(launcher: Launcher, screen: Screen, modifier: Modifier, onAdd: 
             }
         }
         Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-            if (picked.isNotEmpty()) Text("Tout désélectionner", color = Holo.Violet, fontSize = 14.sp,
+            if (picked.isNotEmpty()) Text("Deselect all", color = Holo.Violet, fontSize = 14.sp,
                 modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable { picked.clear() }.padding(10.dp))
             Spacer(Modifier.weight(1f))
-            PillButton(if (picked.isEmpty()) "Choisis des applis" else "Ajouter (${picked.size})", highlighted = picked.isNotEmpty()) {
+            PillButton(if (picked.isEmpty()) "Choose apps" else "Add (${picked.size})", highlighted = picked.isNotEmpty()) {
                 if (picked.isNotEmpty()) onAdd(picked.toList())
             }
         }
@@ -487,16 +488,16 @@ fun AddAppsPanel(launcher: Launcher, screen: Screen, modifier: Modifier, onAdd: 
 
 /** Pli's own settings, for search. */
 private val PLI_SETTINGS = listOf(
-    "Colonnes et lignes" to "grille colonnes lignes taille icones",
-    "Applis dans le dock" to "dock places nombre recentes",
-    "Pack d’icônes" to "icones pack teintees monochrome",
-    "Gestes" to "geste double appui deux doigts verrouiller",
-    "Fond holographique" to "fond ecran wallpaper halos theme",
-    "Météo : choisir une ville" to "meteo ville position",
-    "Sauvegarde de la disposition" to "sauvegarde export import disposition",
-    "Applis masquées" to "masquees cachees",
-    "Verrouiller la disposition" to "verrouiller bloquer disposition",
-    "Page Actus" to "actus actualites news discover",
+    "Columns and rows" to "grid columns rows icon size",
+    "Apps in dock" to "dock slots count recent",
+    "Icon pack" to "icons pack tinted monochrome",
+    "Gestures" to "gesture double tap two fingers lock",
+    "Holographic background" to "background screen wallpaper halos theme",
+    "Weather: choose a city" to "weather city location",
+    "Layout backup" to "backup export import layout",
+    "Hidden apps" to "hidden hide",
+    "Lock layout" to "lock block layout",
+    "Discover page" to "discover news feed today",
 )
 
 /** Every shortcut of every app (needs Pli as the home app). */
