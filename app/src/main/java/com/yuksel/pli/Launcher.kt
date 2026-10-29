@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import org.json.JSONArray
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.util.Locale
 
 /** Holds everything the home screen shows, and saves each change. One instance per activity. */
 class Launcher(private val context: Context) {
@@ -26,7 +27,7 @@ class Launcher(private val context: Context) {
     var lowPower by mutableStateOf(false)
     /** Bumped when the icon look changes so the UI reloads the apps. */
     var iconReloads by mutableStateOf(0); private set
-    /** The last app opened from Pli, and on which screen, for "Continuer" after folding or unfolding. */
+    /** The last app opened from Pli, and on which screen, for "Continue" after folding or unfolding. */
     var lastLaunch by mutableStateOf<Triple<String, Screen, Long>?>(null); private set
 
     private fun iconStyle() = AppRepository.IconStyle(settings.iconPack, settings.tintedIcons)
@@ -54,7 +55,7 @@ class Launcher(private val context: Context) {
     /** Applies the user's names and icons to the system list. */
     private fun publishApps() {
         val names = layout.labels
-        val collator = java.text.Collator.getInstance(java.util.Locale.FRANCE).apply { strength = java.text.Collator.PRIMARY }
+        val collator = java.text.Collator.getInstance(Locale.US).apply { strength = java.text.Collator.PRIMARY }
         val list = rawApps.map { app ->
             val label = names[app.id]
             val icon = customIcons[app.id]?.takeIf { it.first == layout.icons[app.id] }?.second
@@ -111,7 +112,7 @@ class Launcher(private val context: Context) {
     var undo by mutableStateOf<Pair<String, HomeLayout>?>(null); private set
     var undoStamp by mutableStateOf(0L); private set
 
-    /** A user edit that offers "Annuler" for a few seconds. */
+    /** A user edit that offers "Undo" for a few seconds. */
     fun edit(label: String, transform: (HomeLayout) -> HomeLayout) {
         val before = layout
         update(transform)
@@ -171,7 +172,7 @@ class Launcher(private val context: Context) {
     fun folderApps(folderId: String): List<AppInfo> =
         layout.folders[folderId]?.apps?.mapNotNull { byId[it] }?.filter { it.id !in layout.hidden } ?: emptyList()
 
-    fun hide(app: AppInfo) = edit("${app.label} masquée") { l ->
+    fun hide(app: AppInfo) = edit("${app.label} hidden") { l ->
         val folders = l.folders.mapValues { (_, f) -> f.copy(apps = f.apps - app.id) }
         LayoutEdits.clean(l.copy(dock = l.dock - app.id, dockExtra = l.dockExtra - app.id, folders = folders, hidden = l.hidden + app.id)
             .withHome(Screen.COVER, LayoutEdits.blank(l.cover, setOf(app.id))).withHome(Screen.INNER, LayoutEdits.blank(l.inner, setOf(app.id))),
