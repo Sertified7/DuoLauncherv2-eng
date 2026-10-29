@@ -51,18 +51,18 @@ import androidx.compose.ui.unit.sp
 private data class GestureHelp(val icon: ImageVector, val title: String, val text: String)
 
 private val GESTURES = listOf(
-    GestureHelp(Icons.Rounded.KeyboardArrowDown, "Glisser vers le bas", "Ouvre la recherche (applis, calcul, contacts, raccourcis, web). Tout en haut de l’écran : les notifications."),
-    GestureHelp(Icons.Rounded.KeyboardArrowUp, "Glisser vers le haut", "Ouvre la liste de toutes les applis. Glisse vers le bas pour la refermer."),
-    GestureHelp(Icons.Rounded.SwipeUp, "Glisser vers le haut sur une icône", "Ouvre son raccourci favori (marqué ↑ dans le menu de l’appli)."),
-    GestureHelp(Icons.Rounded.TouchApp, "Appui long sur une appli", "Raccourcis, aperçu des notifications, renommer, changer l’icône, protéger, masquer…"),
-    GestureHelp(Icons.Rounded.PanTool, "Appui long puis glisser", "Déplace l’appli dans la case de ton choix ; garde-la au bord de l’écran pour changer de page."),
-    GestureHelp(Icons.Rounded.CreateNewFolder, "Lâcher une appli sur une autre", "Crée un dossier. Appui long sur le dossier pour le mettre en grand (2×2, toute la largeur…)."),
-    GestureHelp(Icons.Rounded.Delete, "Glisser vers la barre du haut", "« Retirer de l’accueil » enlève l’icône (l’appli reste dans la liste)."),
-    GestureHelp(Icons.Rounded.VerticalSplit, "Écran partagé (écran interne)", "Glisse une appli sur « Écran partagé » en haut : elle s’ouvre à côté de la dernière appli."),
-    GestureHelp(Icons.Rounded.Apps, "Appui long sur une case vide", "Ajouter des applis, sélectionner, pages, widgets, verrouiller, réglages."),
-    GestureHelp(Icons.Rounded.SwipeLeft, "Balayer vers la droite", "Tout à gauche : la page Actus."),
-    GestureHelp(Icons.Rounded.ViewCarousel, "Widgets empilés", "Sur « Aujourd’hui », balaie une pile de widgets de côté pour passer de l’un à l’autre."),
-    GestureHelp(Icons.Rounded.Home, "Bouton Accueil", "Ferme tout et revient à la première page."),
+    GestureHelp(Icons.Rounded.KeyboardArrowDown, "Swipe down", "Opens search (apps, calculator, contacts, shortcuts, web). From the very top of the screen: notifications."),
+    GestureHelp(Icons.Rounded.KeyboardArrowUp, "Swipe up", "Opens the all-apps drawer. Swipe down to close it."),
+    GestureHelp(Icons.Rounded.SwipeUp, "Swipe up on an icon", "Opens its favorite shortcut (marked with ↑ in the app menu)."),
+    GestureHelp(Icons.Rounded.TouchApp, "Long-press an app", "Shortcuts, notification preview, rename, change icon, lock, hide…"),
+    GestureHelp(Icons.Rounded.PanTool, "Long-press and drag", "Moves the app to the slot of your choice; hold it at the edge of the screen to change pages."),
+    GestureHelp(Icons.Rounded.CreateNewFolder, "Drop an app onto another", "Creates a folder. Long-press the folder to enlarge it (2×2, full width…)."),
+    GestureHelp(Icons.Rounded.Delete, "Drag to the top bar", "\"Remove from Home\" removes the icon (the app stays in the app drawer)."),
+    GestureHelp(Icons.Rounded.VerticalSplit, "Split screen (inner screen)", "Drag an app to \"Split screen\" at the top: it opens next to the last active app."),
+    GestureHelp(Icons.Rounded.Apps, "Long-press an empty slot", "Add apps, select multiple, pages, widgets, lock, settings."),
+    GestureHelp(Icons.Rounded.SwipeLeft, "Swipe right", "On the far left: the Discover / Today page."),
+    GestureHelp(Icons.Rounded.ViewCarousel, "Stacked widgets", "On \"Today\", swipe a widget stack sideways to switch between them."),
+    GestureHelp(Icons.Rounded.Home, "Home button", "Closes all panels and returns to the first page."),
 )
 
 /** Every gesture of Pli, with a short explanation. */
@@ -70,8 +70,8 @@ private val GESTURES = listOf(
 fun GestureGuide(modifier: Modifier, onClose: () -> Unit) {
     Column(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IridescentText("Gestes de Fold Launcher Pro", 28.sp, Modifier.weight(1f), letterSpacing = (-.3).sp)
-            PillButton("Fermer", onClick = onClose)
+            IridescentText("Fold Launcher Pro Gestures", 28.sp, Modifier.weight(1f), letterSpacing = (-.3).sp)
+            PillButton("Close", onClick = onClose)
         }
         Spacer(Modifier.height(12.dp))
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -110,32 +110,32 @@ fun Onboarding(
                 0 -> {
                     IridescentText("Fold Launcher", 52.sp, letterSpacing = (-1.5).sp)
                     IridescentText("Pro", 52.sp, letterSpacing = (-1.5).sp)
-                    Text("Ton launcher holographique pour le Galaxy Z Fold.", color = Holo.Ink, fontSize = 20.sp, lineHeight = 26.sp)
-                    Text("Deux écrans, deux dispositions, un dock commun, des widgets et une recherche qui apprend de toi. Quelques réglages et c’est parti.",
+                    Text("Your holographic launcher for the Galaxy Z Fold.", color = Holo.Ink, fontSize = 20.sp, lineHeight = 26.sp)
+                    Text("Two screens, two layouts, a shared dock, widgets, and search that learns from you. Just a few settings and you're ready to go.",
                         color = Holo.Muted, fontSize = 15.sp, lineHeight = 21.sp)
                 }
-                1 -> StepCard(Icons.Rounded.Home, "Appli d’accueil", "Pour que le bouton Accueil, les deux écrans et les raccourcis d’applis passent par Fold Launcher Pro.",
-                    done = isDefaultHome, action = "Faire de Fold Launcher Pro l’appli d’accueil", onAction = onMakeDefault)
-                2 -> StepCard(Icons.Rounded.Notifications, "Pastilles et musique", "Les pastilles de notifications, leur aperçu en appui long et la carte de musique en cours ont besoin de l’accès aux notifications. Rien ne sort de ton téléphone.",
-                    done = notificationsAllowed, action = "Autoriser", onAction = onNotificationAccess)
+                1 -> StepCard(Icons.Rounded.Home, "Default home app", "So the Home button, both screens, and app shortcuts work seamlessly with Fold Launcher Pro.",
+                    done = isDefaultHome, action = "Set Fold Launcher Pro as default home", onAction = onMakeDefault)
+                2 -> StepCard(Icons.Rounded.Notifications, "Badges and media", "Notification badges, long-press previews, and the now playing media card require notification access. Nothing leaves your phone.",
+                    done = notificationsAllowed, action = "Allow", onAction = onNotificationAccess)
                 3 -> {
-                    StepTitle(Icons.Rounded.Newspaper, "Météo", "Choisis ta ville, ou utilise la position du téléphone.")
+                    StepTitle(Icons.Rounded.Newspaper, "Weather", "Choose your city, or use your phone's location.")
                     WeatherSettings(launcher, onLocation, onWeatherChanged)
                 }
                 4 -> {
-                    StepTitle(Icons.Rounded.TouchApp, "Les gestes", "Tu retrouveras ce guide dans Réglages → Paramètres.")
+                    StepTitle(Icons.Rounded.TouchApp, "Gestures", "You can find this guide anytime in Settings → Preferences.")
                     GESTURES.take(6).forEach { GestureRow(it) }
                 }
                 else -> {
-                    StepTitle(Icons.Rounded.CheckCircle, "C’est prêt", "Tes applis principales sont déjà placées. Tu peux aussi reprendre une sauvegarde Fold Launcher Pro.")
-                    PillButton("Importer une sauvegarde Fold Launcher Pro", onClick = onImport)
-                    Text("Duo Launcher et l’accueil Samsung ne laissent pas une autre appli lire leur disposition : pour les retrouver, ajoute tes applis avec un appui long sur une case vide → « Ajouter des applis ».",
+                    StepTitle(Icons.Rounded.CheckCircle, "All set", "Your main apps are already placed. You can also restore a Fold Launcher Pro backup.")
+                    PillButton("Import a Fold Launcher Pro backup", onClick = onImport)
+                    Text("Other launchers and One UI Home don't allow apps to read their layouts: to set up your icons, long-press an empty slot → \"Add apps\".",
                         color = Holo.Muted, fontSize = 13.sp, lineHeight = 18.sp)
                 }
             }
         }
         Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (step in 1 until last) Text("Passer", color = Holo.Muted, fontSize = 14.sp,
+            if (step in 1 until last) Text("Skip", color = Holo.Muted, fontSize = 14.sp,
                 modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { step = last }.padding(8.dp))
             Row(Modifier.weight(1f), horizontalArrangement = Arrangement.Center) {
                 repeat(last + 1) { i ->
@@ -143,9 +143,9 @@ fun Onboarding(
                         .background(if (i == step) Holo.Violet else Color.White.copy(alpha = .3f), CircleShape))
                 }
             }
-            if (step > 0) PillButton("Retour") { step-- }
+            if (step > 0) PillButton("Back") { step-- }
             Spacer(Modifier.size(8.dp))
-            PillButton(if (step == last) "Terminer" else if (step == 0) "Commencer" else "Suivant", highlighted = true) {
+            PillButton(if (step == last) "Finish" else if (step == 0) "Get started" else "Next", highlighted = true) {
                 if (step == last) onDone() else step++
             }
         }
@@ -166,6 +166,6 @@ private fun StepCard(icon: ImageVector, title: String, text: String, done: Boole
     StepTitle(icon, title, text)
     if (done) Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Rounded.CheckCircle, null, tint = Holo.Mint)
-        Text("C’est fait", color = Holo.Mint, fontSize = 15.sp, modifier = Modifier.padding(start = 8.dp))
+        Text("Done", color = Holo.Mint, fontSize = 15.sp, modifier = Modifier.padding(start = 8.dp))
     } else PillButton(action, highlighted = true, onClick = onAction)
 }
