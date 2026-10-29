@@ -14,6 +14,7 @@ import android.graphics.drawable.AdaptiveIconDrawable
 import android.graphics.drawable.Drawable
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
+import java.util.Locale
 
 data class IconPackInfo(val packageName: String, val label: String)
 
@@ -28,7 +29,7 @@ object IconPacks {
             runCatching { pm.queryIntentActivities(Intent(action), PackageManager.GET_META_DATA) }.getOrDefault(emptyList())
         }.map { it.activityInfo.packageName }.distinct().mapNotNull { pkg ->
             runCatching { IconPackInfo(pkg, pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()) }.getOrNull()
-        }.sortedBy { it.label.lowercase() }
+        }.sortedBy { it.label.lowercase(Locale.US) }
     }
 
     /** Loaded pack: component ("pkg/cls") → drawable. */
@@ -65,7 +66,7 @@ object IconPacks {
         Pack(res, packageName, map)
     }.getOrNull()
 
-    /** A monochrome version of an icon in the given colour (themed icon if the app has one, else a tinted silhouette). */
+    /** A monochrome version of an icon in the given color (themed icon if the app has one, else a tinted silhouette). */
     fun tinted(source: Drawable, size: Int, color: Int): Bitmap {
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
