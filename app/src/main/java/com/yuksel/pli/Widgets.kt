@@ -12,7 +12,7 @@ import android.os.Bundle
 import android.util.SizeF
 import android.view.ViewGroup
 
-/** Hosts the Android widgets of the "Aujourd'hui" column and runs the add (bind + configure) flow. */
+/** Hosts the Android widgets of the "Today" column and runs the add (bind + configure) flow. */
 class Widgets(private val activity: Activity) {
     val manager: AppWidgetManager = AppWidgetManager.getInstance(activity)
     private val host = AppWidgetHost(activity, HOST_ID)
