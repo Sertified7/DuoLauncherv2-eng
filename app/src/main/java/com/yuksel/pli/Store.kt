@@ -28,17 +28,17 @@ data class PliSettings(
     val lockLayout: Boolean = false,
     val recentInDock: Int = 2,
     val iconShape: String = "circle",
-    /** Right of the clock: "google", "finder", "pli" or "none". */
+    /** Right of the clock: "google", "finder", "pli", or "none". */
     val headerSearch: String = "google",
     /** "holo": iridescent burst + app growing from its icon; "system": Android's default. */
     val launchAnimation: String = "holo",
     val haptics: Boolean = true,
-    /** Below 20 % (not charging): no moving halos, no launch effect. */
+    /** Below 20% (not charging): no moving halos, no launch effect. */
     val batterySaver: Boolean = true,
     val onboarded: Boolean = false,
 )
 
-/** Saves the layout, the settings and the quick note in private preferences. */
+/** Saves the layout, settings, and quick note in private preferences. */
 class Store(context: Context) {
     private val prefs = context.getSharedPreferences("pli", Context.MODE_PRIVATE)
 
